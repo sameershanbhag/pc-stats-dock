@@ -1,0 +1,20 @@
+{
+  "port": 4400,
+  "lhm_url": "http://localhost:8085/data.json",
+  "poll_ms": 500,
+  "pc_name": "",
+  "buttons": [
+    { "id": "desk-prev",   "label": "Desktop", "sub": "previous",  "glyph": "◀", "type": "hotkey", "keys": ["win", "ctrl", "left"] },
+    { "id": "desk-next",   "label": "Desktop", "sub": "next",      "glyph": "▶", "type": "hotkey", "keys": ["win", "ctrl", "right"] },
+    { "id": "task-view",   "label": "Task View", "sub": "all windows", "glyph": "⧉", "type": "hotkey", "keys": ["win", "tab"] },
+    { "id": "new-desktop", "label": "New desktop", "sub": "",       "glyph": "+", "type": "hotkey", "keys": ["win", "ctrl", "d"] },
+    { "id": "move-window", "label": "Move window", "sub": "to other screen", "glyph": "⇄", "type": "hotkey", "keys": ["win", "shift", "left"] },
+    { "id": "snap",        "label": "Snap", "sub": "layouts",       "glyph": "▦", "type": "hotkey", "keys": ["win", "z"] },
+    { "id": "app1",        "label": "App 1", "sub": "taskbar pin 1", "glyph": "1", "type": "hotkey", "keys": ["win", "1"] },
+    { "id": "app2",        "label": "App 2", "sub": "taskbar pin 2", "glyph": "2", "type": "hotkey", "keys": ["win", "2"] },
+    { "id": "app3",        "label": "App 3", "sub": "taskbar pin 3", "glyph": "3", "type": "hotkey", "keys": ["win", "3"] },
+    { "id": "mic",         "label": "Mic", "sub": "mute toggle",    "glyph": "●", "type": "mic" },
+    { "id": "vol-down",    "label": "Volume", "sub": "down",        "glyph": "−", "type": "volume", "dir": "down" },
+    { "id": "vol-up",      "label": "Volume", "sub": "up",          "glyph": "+", "type": "volume", "dir": "up" }
+  ]
+}

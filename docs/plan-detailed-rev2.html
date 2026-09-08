@@ -1,0 +1,624 @@
+<title>PC Stats Dock</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #F3F5F4;
+    --surface: #FFFFFF;
+    --surface-2: #E9EDEB;
+    --ink: #17201E;
+    --muted: #5C6865;
+    --line: #D3DAD7;
+    --line-strong: #AEB8B4;
+    --accent: #B5632A;
+    --accent-ink: #FFFFFF;
+    --accent-soft: #F5E6DA;
+    --teal: #2A7A82;
+    --teal-soft: #DCEEF0;
+    --warn: #9C6A12;
+    --warn-soft: #F7EBCF;
+    --code-bg: #1B2422;
+    --code-ink: #E7ECEA;
+    --display: "Chakra Petch", "Trebuchet MS", "Segoe UI", sans-serif;
+    --body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+    --mono: "IBM Plex Mono", "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121716;
+      --surface: #1A2220;
+      --surface-2: #222B29;
+      --ink: #E6EBE8;
+      --muted: #9CA8A4;
+      --line: #2D3835;
+      --line-strong: #46534F;
+      --accent: #E08C4C;
+      --accent-ink: #1A120B;
+      --accent-soft: #3A2919;
+      --teal: #6FBFC6;
+      --teal-soft: #1B3335;
+      --warn: #E2B25A;
+      --warn-soft: #3A2E15;
+      --code-bg: #0E1413;
+      --code-ink: #DCE3E0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121716;
+    --surface: #1A2220;
+    --surface-2: #222B29;
+    --ink: #E6EBE8;
+    --muted: #9CA8A4;
+    --line: #2D3835;
+    --line-strong: #46534F;
+    --accent: #E08C4C;
+    --accent-ink: #1A120B;
+    --accent-soft: #3A2919;
+    --teal: #6FBFC6;
+    --teal-soft: #1B3335;
+    --warn: #E2B25A;
+    --warn-soft: #3A2E15;
+    --code-bg: #0E1413;
+    --code-ink: #DCE3E0;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--teal); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:hover { color: var(--accent); }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .page {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 32px 24px 96px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+  }
+  @media (min-width: 1040px) {
+    .page { grid-template-columns: 210px minmax(0, 1fr); }
+    .toc { position: sticky; top: 24px; align-self: start; }
+  }
+
+  /* ---- TOC ---- */
+  .toc { font-family: var(--display); font-size: 13px; letter-spacing: 0.02em; }
+  .toc .toc-title { text-transform: uppercase; letter-spacing: 0.12em; font-size: 11px; color: var(--muted); margin: 0 0 10px; }
+  .toc ol { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--line); }
+  .toc li a { display: block; padding: 5px 0 5px 12px; color: var(--muted); text-decoration: none; border-left: 2px solid transparent; margin-left: -1px; }
+  .toc li a:hover { color: var(--ink); border-left-color: var(--accent); }
+  .toc li.sub a { padding-left: 24px; font-size: 12px; }
+
+  /* ---- Type scale ---- */
+  h1, h2, h3 { text-wrap: balance; margin: 0; }
+  h1 { font-family: var(--display); font-weight: 700; font-size: clamp(2rem, 4vw, 2.75rem); line-height: 1.05; letter-spacing: -0.01em; }
+  h2 { font-family: var(--display); font-weight: 600; font-size: 1.5rem; line-height: 1.2; }
+  h3 { font-family: var(--body); font-weight: 600; font-size: 1.05rem; margin-top: 8px; }
+  p { margin: 0; max-width: 68ch; }
+  .lede { font-size: 1.125rem; color: var(--muted); max-width: 62ch; }
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin: 0 0 6px; }
+  .stamp { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .stamp b { color: var(--ink); font-weight: 500; }
+
+  header.hero { display: grid; gap: 16px; padding-bottom: 28px; border-bottom: 1px solid var(--line-strong); }
+  header.hero .meta { display: flex; flex-wrap: wrap; gap: 16px 28px; }
+
+  section { display: grid; gap: 16px; scroll-margin-top: 24px; }
+  .content { display: grid; gap: 56px; min-width: 0; }
+  .prose { display: grid; gap: 12px; }
+  ul, ol { margin: 0; padding-left: 22px; max-width: 70ch; }
+  li { margin: 0; }
+  li + li { margin-top: 6px; }
+  strong { font-weight: 600; }
+
+  /* ---- Summary strip ---- */
+  .strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  @media (max-width: 720px) { .strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .tile { background: var(--surface); padding: 16px 18px; display: grid; gap: 4px; align-content: start; }
+  .tile .k { font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  .tile .v { font-family: var(--display); font-weight: 600; font-size: 1.6rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .tile .s { font-size: 13px; color: var(--muted); }
+
+  /* ---- Tables ---- */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th { font-family: var(--display); font-weight: 600; font-size: 11.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line-strong); background: var(--surface-2); white-space: nowrap; }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td.price, th.price { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.pick { font-weight: 600; }
+  td .sub { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }
+  td.part { font-family: var(--mono); font-size: 13px; white-space: nowrap; }
+  tr.rec td { background: var(--accent-soft); }
+  .tot td { font-weight: 600; background: var(--surface-2); }
+
+  .chip { display: inline-block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; padding: 2px 7px; border: 1px solid var(--line-strong); color: var(--muted); white-space: nowrap; }
+  .chip.ok { border-color: var(--teal); color: var(--teal); background: var(--teal-soft); }
+  .chip.oos { border-color: var(--warn); color: var(--warn); background: var(--warn-soft); }
+  .chip.free { border-color: var(--line-strong); }
+
+  /* ---- Notes, code, diagrams ---- */
+  .note { padding: 14px 18px; background: var(--surface); border-top: 2px solid var(--accent); border-bottom: 1px solid var(--line); max-width: 74ch; }
+  .note .eyebrow { margin-bottom: 4px; }
+  pre { margin: 0; background: var(--code-bg); color: var(--code-ink); font-family: var(--mono); font-size: 13px; line-height: 1.5; padding: 14px 16px; overflow-x: auto; }
+  code { font-family: var(--mono); font-size: 0.92em; background: var(--surface-2); padding: 1px 5px; }
+  pre code { background: none; padding: 0; }
+  .diagram { background: var(--surface); border: 1px solid var(--line); padding: 12px; overflow-x: auto; }
+  .diagram .cap { font-family: var(--display); font-size: 13px; color: var(--muted); margin: 0 0 6px 4px; letter-spacing: 0.02em; }
+  pre.mermaid { background: transparent; color: inherit; padding: 0; overflow: visible; }
+
+  .modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  @media (max-width: 820px) { .modes { grid-template-columns: minmax(0, 1fr); } }
+  .mode { background: var(--surface); padding: 18px; display: grid; gap: 8px; align-content: start; }
+  .mode h3 { font-family: var(--display); font-size: 1.1rem; margin: 0; }
+  .mode p { font-size: 14px; color: var(--muted); }
+  .mode .cab { font-family: var(--mono); font-size: 12px; color: var(--ink); }
+
+  .buylist { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 32px; }
+  @media (max-width: 820px) { .buylist { grid-template-columns: minmax(0, 1fr); } }
+  .vendor h3 { font-family: var(--display); margin: 0 0 6px; }
+  .vendor .url { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  ul.check { list-style: none; padding: 0; margin: 8px 0 0; font-size: 14px; }
+  ul.check li { position: relative; padding-left: 24px; }
+  ul.check li::before { content: ""; position: absolute; left: 0; top: 4px; width: 12px; height: 12px; border: 1.5px solid var(--line-strong); }
+  ul.check li .p { font-family: var(--mono); color: var(--muted); }
+
+  .kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 18px; font-size: 14px; max-width: 74ch; }
+  .kv dt { font-family: var(--mono); font-size: 12px; color: var(--muted); padding-top: 2px; }
+  .kv dd { margin: 0; }
+
+  .steps { border: 1px solid var(--line); background: var(--surface); }
+  .steps .row { display: grid; grid-template-columns: 96px minmax(0, 1fr) 220px; gap: 16px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .steps .row:last-child { border-bottom: none; }
+  @media (max-width: 820px) { .steps .row { grid-template-columns: 72px minmax(0, 1fr); } .steps .row .done { grid-column: 2; } }
+  .steps .wk { font-family: var(--display); font-weight: 600; color: var(--accent); }
+  .steps .wk small { display: block; font-family: var(--mono); font-weight: 400; font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+  .steps .done { font-size: 13px; color: var(--muted); }
+  .steps .done::before { content: "Done when · "; font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .steps p { font-size: 14px; max-width: none; }
+
+  .sources { font-size: 13px; color: var(--muted); max-width: 80ch; }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="page">
+  <nav class="toc" aria-label="Sections">
+    <p class="toc-title">Plan · rev 2</p>
+    <ol>
+      <li><a href="#verdict">Verdict</a></li>
+      <li><a href="#modes">Modes</a></li>
+      <li><a href="#wiring">Wiring</a></li>
+      <li><a href="#wireless">Going wireless</a></li>
+      <li><a href="#bom">Parts &amp; prices</a></li>
+      <li class="sub"><a href="#bom-a">A · Display</a></li>
+      <li class="sub"><a href="#bom-b">B · Macro pad</a></li>
+      <li class="sub"><a href="#bom-c">C · Dock electronics</a></li>
+      <li class="sub"><a href="#bom-d">D · Body &amp; mounting</a></li>
+      <li class="sub"><a href="#bom-e">E · Wireless kit</a></li>
+      <li class="sub"><a href="#bom-f">F · In-case kit</a></li>
+      <li><a href="#budget">Budget tiers</a></li>
+      <li><a href="#buy">Order list</a></li>
+      <li><a href="#software">Software</a></li>
+      <li><a href="#steps">Build sequence</a></li>
+      <li><a href="#checks">Pre-purchase checks</a></li>
+      <li><a href="#gotchas">Gotchas</a></li>
+      <li><a href="#under100">Panels under $100</a></li>
+    </ol>
+  </nav>
+
+  <main class="content">
+    <header class="hero">
+      <p class="eyebrow">Hardware project · build plan · revision 2</p>
+      <h1>A 10.1-inch wide touch panel that docks on the desk, snaps into the case, travels to the office, and can run wireless</h1>
+      <p class="lede">A real second monitor (HDMI or one USB-C cable, no drivers) in a 3D-printed dock with a 12-key macro pad and a knob. The panel's own USB hub replaces the dock electronics from revision 1, and a Raspberry Pi 5 hidden in the base makes it wireless.</p>
+      <div class="meta">
+        <span class="stamp">Prices checked <b>2026-09-06</b>, US vendors</span>
+        <span class="stamp"><span class="chip ok">verified</span> read from the vendor page that day</span>
+        <span class="stamp"><span class="chip">est.</span> typical street price, confirm at checkout</span>
+      </div>
+      <div class="strip" aria-label="Summary">
+        <div class="tile"><span class="k">Dock build</span><span class="v">≈ $269</span><span class="s">panel + macro pad + charger + cables + body · wireless adds ≈ $82</span></div>
+        <div class="tile"><span class="k">Screen</span><span class="v">10.1″ wide · 1540×720</span><span class="s">Magedok T101F, 10-point touch, USB-C + HDMI + 3-port hub, 249×132 mm</span></div>
+        <div class="tile"><span class="k">Cables to the PC</span><span class="v">2 / 1 / 0</span><span class="s">home wired / office / wireless</span></div>
+        <div class="tile"><span class="k">Stock</span><span class="v">Amazon · Newegg</span><span class="s">Magedok's own store is sold out with no restock date</span></div>
+      </div>
+    </header>
+
+    <section id="verdict">
+      <div>
+        <p class="eyebrow">Decision</p>
+        <h2>Magedok T101F. The wide shape and the built-in hub both simplify the build.</h2>
+      </div>
+      <div class="prose">
+        <ul>
+          <li><strong>Only 132 mm tall.</strong> It stands on a PSU shroud without covering the graphics card. The 16:10 10.1″ was 165 mm and reached into the card.</li>
+          <li><strong>249 mm wide</strong> is a natural sensor-panel shape: gauges left, touch grid right, or one long strip.</li>
+          <li><strong>Three USB-A ports on the monitor act as a hub</strong> for whatever is on its USB-C. The macro pad plugs into the monitor. One cable from a laptop carries video, touch, power and the macro pad. That is the whole dock, electrically.</li>
+          <li><strong>Two USB-C ports:</strong> one full-function, one power-only, so the charger powers the panel while the PC or Pi only carries data.</li>
+        </ul>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Rejected</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td class="pick">Raspberry Pi as the display</td><td>A Pi cannot be a monitor. It can be the wireless brain behind a real monitor, which is what revision 2 does.</td></tr>
+            <tr><td class="pick">Elgato Stream Deck</td><td>Needs Elgato's software on the host. Useless on a locked office PC.</td></tr>
+            <tr><td class="pick">Waveshare "USB Monitor" bars</td><td>Not monitors. They only show their own app's themes.</td></tr>
+            <tr><td class="pick">15.6″ bargains ($35–120)</td><td>No touch, and they do not fit a case.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="modes">
+      <div>
+        <p class="eyebrow">Modes</p>
+        <h2>Desk, office, case, wireless</h2>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Mode</th><th>Video</th><th>Touch + macro pad</th><th>Power</th><th>Cables to the computer</th></tr></thead>
+          <tbody>
+            <tr><td class="pick">Desk, wired</td><td>GPU HDMI → monitor HDMI, or a motherboard USB-C with DP Alt Mode → monitor USB-C</td><td>PC USB-A → monitor full-function USB-C. Macro pad in a monitor USB-A port</td><td>30 W PD charger → power-only USB-C</td><td>2, or 1 with DP Alt Mode</td></tr>
+            <tr><td class="pick">Office</td><td>Laptop USB-C → monitor full-function USB-C</td><td>Same cable</td><td>Same cable</td><td>1</td></tr>
+            <tr><td class="pick">Case</td><td>GPU HDMI through a printed PCIe slot pass-through</td><td>Not needed</td><td>SATA rail → adapter</td><td>0 external</td></tr>
+            <tr class="rec"><td class="pick">Wireless</td><td>Pi 5 in the dock base → monitor HDMI</td><td>Pi USB-A → monitor USB-C; the macro pad on the monitor hub reaches the Pi</td><td>Charger → monitor, PSU → Pi, or one 20 000 mAh PD power bank</td><td>0. Wi-Fi does the rest</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="wiring">
+      <div>
+        <p class="eyebrow">Architecture</p>
+        <h2>Wiring in each mode</h2>
+      </div>
+      <div class="diagram">
+        <p class="cap">Desk, wired · gaming PC with a discrete GPU</p>
+<pre class="mermaid">
+flowchart LR
+  GPU["Gaming PC — GPU HDMI out"] -->|"HDMI"| MONH["T101F — HDMI in"]
+  PC["Gaming PC — any USB-A"] -->|"USB-A to C"| MONC["T101F — full-function USB-C, touch + hub"]
+  MONC --- HUB["built-in hub: 3× USB-A"]
+  HUB --> PAD["MacroPad RP2040"]
+  HUB --> LED["WLED controller, optional"]
+  CHG["30 W PD charger"] -->|"USB-C"| MONP["T101F — power-only USB-C"]
+</pre>
+      </div>
+      <div class="diagram">
+        <p class="cap">Office · laptop with USB-C DisplayPort Alt Mode</p>
+<pre class="mermaid">
+flowchart LR
+  LAP["Laptop — USB-C DP Alt Mode"] -->|"one USB-C cable"| MONC["T101F — full-function USB-C"]
+  MONC --- HUB["built-in hub"] --> PAD["MacroPad"]
+</pre>
+      </div>
+      <p>Laptop without USB-C video: its HDMI to the monitor's HDMI and its USB-A to the monitor's USB-C. Same as home.</p>
+      <div class="diagram">
+        <p class="cap">Wireless · Pi 5 hidden in the dock</p>
+<pre class="mermaid">
+flowchart LR
+  PC["Gaming PC — agent + Sunshine"] <-->|"Wi-Fi or Ethernet"| PI["Raspberry Pi 5, 1 GB"]
+  PI -->|"micro-HDMI to HDMI"| MONH["T101F — HDMI in"]
+  PI -->|"USB-A to C"| MONC["T101F — full-function USB-C"]
+  MONC --- HUB["built-in hub"] --> PAD["MacroPad → Pi → agent → PC"]
+  CHG["Charger or power bank"] --> MONP["T101F power port"]
+  CHG --> PIP["Pi 5 USB-C power"]
+</pre>
+      </div>
+      <div class="diagram">
+        <p class="cap">Inside the case</p>
+<pre class="mermaid">
+flowchart LR
+  GPU["GPU HDMI"] -->|"flat HDMI"| PT["Printed PCIe bracket + HDMI coupler"] --> MONH["T101F HDMI"]
+  SATA["Spare SATA power"] --> ADP["SATA to USB adapter"] --> MONP["T101F power port"]
+</pre>
+      </div>
+      <p>Wireless inside the case: mount the Pi 5 in the case too, powered from SATA. Then no video cable leaves the case at all.</p>
+    </section>
+
+    <section id="wireless">
+      <div>
+        <p class="eyebrow">Going wireless</p>
+        <h2>Three ways, in the order I'd recommend them</h2>
+      </div>
+      <div class="note">
+        <p class="eyebrow">What wireless does and doesn't remove</p>
+        <p>It removes the cable to the PC. It does not remove power: the panel draws about 5 W and the Pi 5 another 3–6 W. On a desk that is one charger cable. For a genuinely cordless panel, a 20 000 mAh USB-C PD power bank runs panel + Pi for roughly five hours, the panel alone for ten or more.</p>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Route</th><th>How it works</th><th>Touch</th><th>Lag</th><th>Cost</th></tr></thead>
+          <tbody>
+            <tr class="rec"><td class="pick">A · Pi 5 thin client</td><td>The dashboard is a web page served by the agent on your PC. A Pi 5 in the dock base runs Chromium full-screen at 1540×720 over Wi-Fi. Taps post actions to the agent, which presses the key or switches the desktop. A small service on the Pi forwards the macro pad's keys the same way. The same Pi can move into the case.</td><td>Yes</td><td>Unnoticeable for gauges and buttons</td><td>≈ $82 kit</td></tr>
+            <tr><td class="pick">B · Real wireless second monitor</td><td>Sunshine (free) plus the Virtual Display Driver (free) on the PC create a 1540×720 virtual monitor. Moonlight-Qt on the same Pi streams it at 720p60. Windows sees a real monitor: drag windows to it, run AIDA64 on it. Coexists with A: boot into the dashboard, switch to Moonlight when you want the whole monitor.</td><td>As mouse clicks</td><td>20–40 ms on 5 GHz Wi-Fi, less on Ethernet</td><td>Same Pi, $0 extra</td></tr>
+            <tr><td class="pick">C · Miracast dongle</td><td>EZCast or AnyCast receiver in the monitor's HDMI, powered from a monitor USB-A port. Windows: Win+K → Extend. Nothing to install.</td><td><strong>No</strong>, the touch data has no path back</td><td>100–200 ms, occasional dropouts</td><td>$20–30</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Buy a Pi 5 1 GB ($45 list, $42.99 at Micro Center). It is price-protected and in stock at CanaKit, PiShop, Adafruit and Micro Center. Do not chase a Zero 2 W: $15 list, unobtainable at list in 2026. At the office, corporate Wi-Fi usually isolates devices, so there you plug the laptop's USB-C into the panel as before and the Pi sits idle.</p>
+    </section>
+
+    <section id="bom">
+      <div>
+        <p class="eyebrow">Bill of materials</p>
+        <h2>Parts, prices, vendors</h2>
+        <p class="stamp">Modules match the rows in <code>bom.csv</code>. Shaded rows are the picks.</p>
+      </div>
+
+      <div id="bom-a" class="prose">
+        <h3>Module A — Display</h3>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Item</th><th>Spec</th><th class="price">Price</th><th>Status</th><th>Where</th></tr></thead>
+            <tbody>
+              <tr class="rec"><td class="pick">Magedok T101F</td><td>10.1″ 1540×720 IPS, 350 nits, 10-point touch. USB-C full-function + USB-C power-only + HDMI + 3× USB-A hub + 3.5 mm. 2×1 W speakers, VESA 75×75, 249×131.6×20 mm, 460 g, about 5 W.<span class="sub">Box: USB-C 3.1 Gen 2 cable, USB-C→USB-A cable, HDMI cable, screws, 12 V adapter per the accessory list</span></td><td class="price">$99.00<span class="sub">list $129</span></td><td><span class="chip oos">sold out at Magedok</span></td><td><a href="https://www.amazon.com/dp/B0FGCVT6P2">Amazon B0FGCVT6P2</a> · <a href="https://www.newegg.com/p/3C6-020A-014Z2">Newegg</a> · <a href="https://store.magedok.com/products/10-1-inch-ips-1540-720-usb-c-portable-touchscreen-mini-monitor-t101f">Magedok</a></td></tr>
+              <tr><td>Magedok T101E, fallback</td><td>10.1″ 1920×1200 16:10, same port layout minus the hub.</td><td class="price">$139.00</td><td><span class="chip ok">in stock</span></td><td><a href="https://store.magedok.com/products/10-1-inch-ips-1920-1200-fhd-usb-c-with-pd-fast-charge-portable-touch-monitor-t101e">Magedok</a></td></tr>
+              <tr><td>Waveshare 8HP-CAPLCD Monitor, fallback</td><td>8″ 1280×800, HDMI + Type-C video, aluminum case, VESA 50.</td><td class="price">$67.27–69.99</td><td><span class="chip ok">in stock</span></td><td><a href="https://www.waveshare.com/8hp-caplcd-monitor.htm">waveshare.com</a></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note">
+          <p class="eyebrow">Power port</p>
+          <p>The store lists a 12 V adapter and typical 5 W draw, and its FAQ mentions a 30 W PD adapter. Until the unit is in hand, assume the power-only port wants USB-PD: any 20–30 W PD charger negotiates 9, 12 or 15 V. If it also runs on plain 5 V, the in-case power gets simpler.</p>
+        </div>
+      </div>
+
+      <div id="bom-b" class="prose">
+        <h3>Module B — Control surface</h3>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Item</th><th class="price">Price</th><th>Status</th><th>Where</th></tr></thead>
+            <tbody>
+              <tr class="rec"><td class="pick">Adafruit MacroPad RP2040 bare board <span class="part">#5100</span></td><td class="price">$34.95</td><td><span class="chip ok">21 in stock</span></td><td><a href="https://www.adafruit.com/product/5100">adafruit.com</a></td></tr>
+              <tr class="rec"><td class="pick">Enclosure + hardware add-on pack <span class="part">#5103</span></td><td class="price">$4.95</td><td><span class="chip ok">in stock</span></td><td>tick the add box on the #5100 page</td></tr>
+              <tr class="rec"><td class="pick">Kailh Linear Black switches 12-pack <span class="part">#5876</span> (Red #5122 is out)</td><td class="price">$7.95</td><td><span class="chip ok">in stock</span></td><td>same page</td></tr>
+              <tr class="rec"><td class="pick">Clear DSA keycaps 12-pack <span class="part">#5068</span></td><td class="price">$6.95</td><td><span class="chip ok">in stock</span></td><td>same page</td></tr>
+              <tr><td>Starter Kit <span class="part">#5128</span>, all of the above with red switches</td><td class="price">$49.95</td><td><span class="chip oos">out of stock</span></td><td><a href="https://www.adafruit.com/product/5128">adafruit.com</a></td></tr>
+              <tr class="tot"><td>Bare-board route</td><td class="price">$54.80</td><td colspan="2">Plugs into one of the monitor's USB-A ports</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="bom-c" class="prose">
+        <h3>Module C — Dock electronics, much shorter now</h3>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Item</th><th>Role</th><th class="price">Price</th><th>Status</th><th>Where</th></tr></thead>
+            <tbody>
+              <tr><td>Anker Nano 30 W USB-C PD charger</td><td>Powers the panel at home. Replaces the 65 W two-port charger.</td><td class="price">$16<span class="sub">often $10–12</span></td><td><span class="chip ok">verified</span></td><td><a href="https://www.amazon.com/dp/B0B2MLRF93">Amazon</a></td></tr>
+              <tr><td>Cable Matters USB-C Gen 2 100 W 4K cable, 1 m</td><td>Laptop → panel at the office.</td><td class="price">$10</td><td><span class="chip">est.</span></td><td><a href="https://www.amazon.com/dp/B01L0F6AJI">Amazon</a></td></tr>
+              <tr><td>Cable Matters USB-A → C 1 ft, 2-pack</td><td>Panel hub → MacroPad, PC → panel.</td><td class="price">$10</td><td><span class="chip">est.</span></td><td><a href="https://www.amazon.com/dp/B018X3IM6Y">Amazon</a></td></tr>
+              <tr><td>UVOOI HDMI 1 ft, 2-pack</td><td>Pi → panel inside the dock.</td><td class="price">$7</td><td><span class="chip">est.</span></td><td><a href="https://www.amazon.com/dp/B0B5JM7Y4G">Amazon</a></td></tr>
+              <tr><td>24-pin magnetic USB-C adapter · optional</td><td>Breakaway tip at the laptop.</td><td class="price">$18</td><td><span class="chip">est.</span></td><td><a href="https://www.amazon.com/dp/B09YRGSZ6G">Amazon</a></td></tr>
+              <tr><td>WLED ESP32 controller + 1 m WS2812B 5 V strip · optional</td><td>Underglow tied to GPU temperature.</td><td class="price">$32</td><td><span class="chip ok">range verified</span></td><td><a href="https://www.amazon.com/dp/B0FC2VPXHX">Amazon</a></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Gone from revision 1: the USB-C hub, the HDMI switch, the HDMI couplers and the 65 W charger. About $75 saved.</p>
+      </div>
+
+      <div id="bom-d" class="prose">
+        <h3>Module D — Dock body and mounting</h3>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Item</th><th class="price">Price</th><th>Status</th><th>Where</th></tr></thead>
+            <tbody>
+              <tr><td>Filament, PETG or ASA, 1 kg (or JLC3DP print service, $20–45)</td><td class="price">$25</td><td><span class="chip">est.</span></td><td>Amazon · <a href="https://jlc3dp.com/">jlc3dp.com</a></td></tr>
+              <tr><td>N52 discs 10×3 mm, 50-pack</td><td class="price">$9</td><td><span class="chip">est.</span></td><td><a href="https://www.amazon.com/dp/B0C4NGVZGG">Amazon</a></td></tr>
+              <tr><td>M3 heat-set inserts, 100</td><td class="price">$9</td><td><span class="chip">est.</span></td><td><a href="https://www.amazon.com/dp/B0BVMMBG2N">Amazon</a></td></tr>
+              <tr><td>M2/M3/M4 socket screw kit</td><td class="price">$6</td><td><span class="chip">est.</span></td><td><a href="https://www.amazon.com/dp/B0CHMKL1DF">Amazon</a></td></tr>
+              <tr><td>Rubber feet</td><td class="price">$5</td><td><span class="chip">est.</span></td><td><a href="https://www.amazon.com/dp/B085DMB1XV">Amazon</a></td></tr>
+              <tr><td>Quick-release VESA bracket, free STL to remix</td><td class="price">$0</td><td><span class="chip free">free</span></td><td><a href="https://www.printables.com/model/426037-quick-release-bracket-for-vesa-monitors">printables.com</a></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Design targets: base about 280 × 120 × 40 mm, screen at 20°, MacroPad recessed in front at 10°, a vented bay in the base for the Pi 5 with its active cooler, a bay for the charger, magnets plus a ledge on a VESA-75 carrier plate.</p>
+      </div>
+
+      <div id="bom-e" class="prose">
+        <h3>Module E — Wireless kit, optional</h3>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Item</th><th class="price">Price</th><th>Status</th><th>Where</th></tr></thead>
+            <tbody>
+              <tr class="rec"><td class="pick">Raspberry Pi 5, 1 GB</td><td class="price">$45<span class="sub">$42.99 Micro Center</span></td><td><span class="chip ok">verified</span></td><td><a href="https://www.canakit.com/raspberry-pi-5-1gb.html">CanaKit</a> · Micro Center · PiShop</td></tr>
+              <tr class="rec"><td class="pick">Official 27 W USB-C PSU</td><td class="price">$12</td><td><span class="chip">est.</span></td><td>same</td></tr>
+              <tr class="rec"><td class="pick">Active cooler or fan case</td><td class="price">$10</td><td><span class="chip">est.</span></td><td>same</td></tr>
+              <tr class="rec"><td class="pick">micro-HDMI → HDMI cable, 0.3–0.5 m</td><td class="price">$7</td><td><span class="chip">est.</span></td><td>Amazon</td></tr>
+              <tr class="rec"><td class="pick">microSD 32 GB A1</td><td class="price">$8</td><td><span class="chip">est.</span></td><td>Amazon</td></tr>
+              <tr><td>Miracast receiver (EZCast / AnyCast), instead of the Pi</td><td class="price">$20–30</td><td><span class="chip ok">range verified</span></td><td>Amazon</td></tr>
+              <tr><td>20 000 mAh USB-C PD power bank, for cordless use</td><td class="price">$40</td><td><span class="chip">est.</span></td><td>Amazon</td></tr>
+              <tr class="tot"><td>Pi kit</td><td class="price">≈ $82</td><td colspan="2"></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="bom-f" class="prose">
+        <h3>Module F — In-case kit</h3>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Item</th><th class="price">Price</th><th>Where</th></tr></thead>
+            <tbody>
+              <tr><td>SATA 15-pin → USB-A female 5 V adapter, if the panel accepts 5 V</td><td class="price">$8–12</td><td><a href="https://www.ebay.com/itm/127511365504">eBay (CRJ)</a></td></tr>
+              <tr><td>SATA → 12 V barrel cable + 12 V barrel → USB-C PD trigger cable, if it insists on 12 V</td><td class="price">$15</td><td>Amazon</td></tr>
+              <tr><td>Flat HDMI 5 ft + right-angle HDMI adapters</td><td class="price">$18</td><td><a href="https://www.amazon.com/dp/B074SXRP6G">Amazon</a> · <a href="https://www.amazon.com/dp/B00CF4G7JC">Amazon</a></td></tr>
+              <tr><td>Printed PCIe HDMI pass-through bracket + one HDMI keystone coupler</td><td class="price">$0 + $8</td><td><a href="https://www.printables.com/model/346692-pcie-bracket-with-screw-in-hdmi-slot-for-sensor-pa">printables.com</a> · <a href="https://www.monoprice.com/product?p_id=6852">Monoprice</a></td></tr>
+              <tr><td>DP → HDMI adapter, only if the GPU's HDMI is taken</td><td class="price">$9</td><td><a href="https://www.amazon.com/dp/B00K0UDYLM">Amazon</a></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="budget">
+      <div>
+        <p class="eyebrow">Budget</p>
+        <h2>Four tiers</h2>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Tier</th><th>What you get</th><th class="price">Total</th></tr></thead>
+          <tbody>
+            <tr><td class="pick">1 · Panel only</td><td>T101F with its own cables and adapter, agent + dashboard in a kiosk window. Works on the desk and at the office today.</td><td class="price">$99</td></tr>
+            <tr class="rec"><td class="pick">2 · Dock</td><td>Tier 1 + MacroPad $54.80 + 30 W charger $16 + cables $27 + magnetic tip $18 + magnets, inserts, screws, feet $29 + filament $25.</td><td class="price">≈ $269</td></tr>
+            <tr><td class="pick">3 · Wireless dock</td><td>Tier 2 + Pi 5 kit $82.</td><td class="price">≈ $351</td></tr>
+            <tr><td class="pick">4 · Show-off</td><td>Tier 3 + underglow $32 + in-case kit $35 + power bank $40.</td><td class="price">≈ $458</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Revision 1 was $381 for the dock tier without wireless. The wide panel's built-in hub is where the savings come from.</p>
+    </section>
+
+    <section id="buy">
+      <div>
+        <p class="eyebrow">Ordering</p>
+        <h2>Order list by wave</h2>
+        <p>Nothing is bought by opening a link; each one pre-fills a cart in your own browser session. The same links live in <code>cart-links.md</code>.</p>
+      </div>
+      <div class="buylist">
+        <div class="vendor"><h3>Wave 1 · panel + macro pad</h3><div class="url">amazon.com · newegg.com · adafruit.com</div>
+          <ul class="check">
+            <li>Magedok T101F on <a href="https://www.amazon.com/dp/B0FGCVT6P2">Amazon</a> or <a href="https://www.newegg.com/p/3C6-020A-014Z2">Newegg</a> <span class="p">$99–129, check</span></li>
+            <li>MacroPad #5100 with the three add boxes ticked <span class="p">$54.80</span></li>
+          </ul></div>
+        <div class="vendor"><h3>Wave 2 · dock parts</h3><div class="url">amazon.com, one bulk link in cart-links.md</div>
+          <ul class="check">
+            <li>Anker Nano 30 W charger <span class="p">$16</span></li>
+            <li>USB-C 100 W 1 m · USB-A→C 1 ft ×2 · HDMI 1 ft ×2 <span class="p">≈ $27</span></li>
+            <li>Magnetic USB-C tip <span class="p">≈ $18</span></li>
+            <li>Magnets · inserts · screws · feet <span class="p">≈ $29</span></li>
+            <li>Flat HDMI 5 ft · right-angle HDMI <span class="p">≈ $18</span></li>
+            <li>WLED controller + strip, optional <span class="p">≈ $32</span></li>
+          </ul></div>
+        <div class="vendor"><h3>Wave 3 · wireless kit</h3><div class="url">canakit.com · microcenter.com · pishop.us</div>
+          <ul class="check">
+            <li>Raspberry Pi 5 1 GB <span class="p">$45</span></li>
+            <li>27 W PSU · active cooler <span class="p">≈ $22</span></li>
+            <li>micro-HDMI cable · microSD <span class="p">≈ $15</span></li>
+          </ul></div>
+        <div class="vendor"><h3>After the panel arrives</h3><div class="url">ebay.com · monoprice.com</div>
+          <ul class="check">
+            <li>SATA → USB-A 5 V adapter, or the 12 V pair, depending on what the power port accepts <span class="p">$10–15</span></li>
+            <li>HDMI keystone coupler for the PCIe bracket <span class="p">≈ $8</span></li>
+          </ul></div>
+      </div>
+    </section>
+
+    <section id="software">
+      <div>
+        <p class="eyebrow">Software</p>
+        <h2>Agent, dashboard, firmware, Pi</h2>
+      </div>
+      <div class="prose">
+        <p>The PC side is unchanged from revision 1: LibreHardwareMonitor publishes sensors at <code>/data.json</code>, a Node or Python agent polls it every 500 ms, serves the dashboard on port 4400 over a WebSocket and runs actions on <code>POST /action/&lt;id&gt;</code>. An Edge kiosk window is pinned to the 1540×720 display by size. Tablet PC Settings → Setup maps touch to the right screen. Layouts change to fit 1540×720: a left 60 % gauge strip with a right 3×4 touch grid, or one full-width strip for the case.</p>
+        <h3>New for the Pi</h3>
+<pre><code>software/pi/
+  install.sh          Pi OS Lite + Wayland kiosk (cage or labwc) + Chromium
+  kiosk.service       waits for http://gaming-pc:4400/health, then launches Chromium
+  macropad-forward.py evdev: grabs the MacroPad, maps F13–F24 to POST /action/&lt;id&gt;
+  moonlight.md        Sunshine + Virtual Display Driver on the PC, Moonlight-Qt pairing</code></pre>
+<pre><code>chromium --kiosk --noerrdialogs --disable-infobars --ozone-platform=wayland \
+  --window-size=1540,720 "http://gaming-pc.local:4400/?layout=desk"</code></pre>
+        <p>Wireless-monitor mode: install the Virtual Display Driver on Windows, set one virtual monitor to 1540×720 at 60 Hz in its settings file, add an app in Sunshine whose output is that display. Moonlight on the Pi pairs once with a PIN and then auto-connects.</p>
+        <h3>What "switch between screens" becomes</h3>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Control</th><th>Action</th><th>How</th></tr></thead>
+            <tbody>
+              <tr><td>Keys 1–2, touch ◀ ▶</td><td>Previous / next virtual desktop</td><td><code>Switch-Desktop</code> via PSVirtualDesktop, or Win+Ctrl+←/→</td></tr>
+              <tr><td>Key 3</td><td>New desktop</td><td><code>New-Desktop | Switch-Desktop</code></td></tr>
+              <tr><td>Key 4</td><td>Task View</td><td>Win+Tab</td></tr>
+              <tr><td>Key 5</td><td>Move the active window to the other monitor</td><td>Win+Shift+←</td></tr>
+              <tr><td>Key 6</td><td>Snap layouts</td><td>Win+Z</td></tr>
+              <tr><td>Keys 7–9</td><td>Launch pinned apps</td><td>Win+1, Win+2, Win+3</td></tr>
+              <tr><td>Key 10</td><td>Mic mute</td><td>F13, handled by the agent</td></tr>
+              <tr><td>Key 11</td><td>Screenshot</td><td>Win+Shift+S</td></tr>
+              <tr><td>Key 12</td><td>Layer switch</td><td>Firmware; OLED shows the layer, NeoPixels change color</td></tr>
+              <tr><td>Encoder</td><td>Volume, push = mute, hold = play/pause</td><td>HID Consumer Control</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Wired, the MacroPad is a plain USB keyboard through the panel's hub and needs no software on the host. Wireless, its keys reach the Pi, and the forwarder turns them into agent actions.</p>
+      </div>
+    </section>
+
+    <section id="steps">
+      <div>
+        <p class="eyebrow">Sequence</p>
+        <h2>Five weekends</h2>
+      </div>
+      <div class="steps">
+        <div class="row"><div class="wk"><small>Weekend</small>0</div><p>Pre-purchase checks. Order the T101F from Amazon or Newegg while Magedok is out, plus the MacroPad parts.</p><div class="done">Shipped</div></div>
+        <div class="row"><div class="wk"><small>Weekend</small>1</div><p>HDMI and USB-A into the PC. Extend, Tablet PC Setup. LibreHardwareMonitor, agent, desk layout at 1540×720, kiosk task. Confirm a keyboard in the panel's USB-A port reaches the PC. Note what voltage the power port accepts.</p><div class="done">Gauges at logon, MacroPad works through the panel's hub</div></div>
+        <div class="row"><div class="wk"><small>Weekend</small>2</div><p>Flash CircuitPython, load the layers, test on the office laptop with one USB-C cable.</p><div class="done">Desktop switching from keys and touch on both machines</div></div>
+        <div class="row"><div class="wk"><small>Weekend</small>3</div><p>Measure. CAD the dock: 280×120 base, Pi bay, charger bay, VESA-75 carrier with magnets and a ledge. Print the carrier and one receiver first.</p><div class="done">Snaps on and off, nothing wobbles</div></div>
+        <div class="row"><div class="wk"><small>Weekend</small>4</div><p>Print the body, fit the MacroPad and charger, cable it. Print the PCIe pass-through and the case receiver.</p><div class="done">One-cable office test and case test pass</div></div>
+        <div class="row"><div class="wk"><small>Weekend</small>5</div><p>Pi 5: kiosk image, MacroPad forwarder, Sunshine + Moonlight. Underglow.</p><div class="done">Panel runs with no cable to the PC</div></div>
+      </div>
+    </section>
+
+    <section id="checks">
+      <div>
+        <p class="eyebrow">Before you buy</p>
+        <h2>Fifteen minutes that save a return</h2>
+      </div>
+      <dl class="kv">
+        <dt>Office laptop</dt><dd>USB-C with video (⚡ or DisplayPort logo)? Otherwise its HDMI plus a USB-A works the same way.</dd>
+        <dt>IT policy</dt><dd>External displays and USB keyboards allowed? USB storage is often blocked, which is why the MacroPad's boot profile hides its drive.</dd>
+        <dt>Gaming PC</dt><dd>Free GPU HDMI? Else the DP→HDMI adapter. Motherboard USB-C with DP Alt Mode? Then one cable at home.</dd>
+        <dt>Case</dt><dd>Flat spot at least 260 × 140 mm with 25 mm clearance (the panel is 20 mm thick). Free PCIe slot cover, spare SATA connector.</dd>
+        <dt>Wi-Fi</dt><dd>5 GHz reachable at the desk for the wireless mode. Ethernet to the dock is even better.</dd>
+        <dt>Printer</dt><dd>Your own, a makerspace, or JLC3DP.</dd>
+      </dl>
+    </section>
+
+    <section id="gotchas">
+      <div>
+        <p class="eyebrow">Known traps</p>
+        <h2>Gotchas</h2>
+      </div>
+      <ul>
+        <li><strong>Stock.</strong> Magedok's store is sold out. Amazon and Newegg carry the same SKU; the price drifts between $99 and $129.</li>
+        <li><strong>Power port voltage is unconfirmed.</strong> Keep the included adapter as the dock brick if the Anker 30 W does not light it up, and choose the in-case power adapter after testing 5 V.</li>
+        <li><strong>The panel's hub only works with a host on its USB-C.</strong> HDMI alone leaves the USB-A ports dead. Always run the USB-A→C cable to the PC or the Pi.</li>
+        <li><strong>Miracast has no touch path.</strong> Only the Pi routes give you touch wirelessly.</li>
+        <li><strong>Two HDMI sources</strong> (GPU and Pi) share one HDMI input. Choose per session, or add a $15 HDMI switch back if you want both cabled at once.</li>
+        <li>Touch on the wrong screen after re-plugging: Tablet PC Settings → Setup.</li>
+        <li>LibreHardwareMonitor needs admin and binds all interfaces: Task Scheduler with highest privileges plus a firewall rule.</li>
+        <li>Magnets do not carry weight in shear; the carrier plate needs a ledge.</li>
+      </ul>
+    </section>
+
+    <section id="under100">
+      <div>
+        <p class="eyebrow">Checked 2026-09-06</p>
+        <h2>Touch panels under $100, for the record</h2>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Panel</th><th>Size / res</th><th>USB-C video</th><th>HDMI</th><th>Mount</th><th class="price">Price</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr class="rec"><td class="pick">Magedok T101F, chosen</td><td>10.1″ wide 1540×720, 10-pt, 350 nits</td><td>Yes + power-only USB-C + 3-port hub</td><td>Yes</td><td>VESA 75</td><td class="price">$99</td><td>Out of stock at Magedok; Amazon, Newegg</td></tr>
+            <tr><td>Waveshare 8HP-CAPLCD Monitor</td><td>8″ 1280×800, 10-pt</td><td>Yes</td><td>Yes</td><td>VESA 50</td><td class="price">$67.27–69.99</td><td>Aluminum case, cables and stand included</td></tr>
+            <tr><td>Waveshare 7EP-CAPLCD Monitor</td><td>7″ 1280×800, 10-pt</td><td>Yes</td><td>Yes</td><td>VESA 50</td><td class="price">$77.27–79.99</td><td>Smaller, pricier</td></tr>
+            <tr><td>LESOWN P89GPT</td><td>8.9″ 1920×1200, 5-pt, 350 nits</td><td>Listed, unverified</td><td>mini</td><td>VESA</td><td class="price">$52.99 Walmart<span class="sub">$125 at lesown.com</span></td><td>Price gap is suspicious</td></tr>
+            <tr><td>Magedok T089B</td><td>8.9″ 1920×1200, 10-pt, 450 nits</td><td>Yes + power-only</td><td>Yes</td><td>VESA</td><td class="price">$89</td><td>Out of stock</td></tr>
+            <tr><td>Elecrow 8″</td><td>8″ 1280×800</td><td>No</td><td>mini</td><td>VESA</td><td class="price">$56.90</td><td>HDMI only</td></tr>
+            <tr><td>LESOWN P88-T</td><td>8.8″ 1920×480 bar</td><td>Yes</td><td>—</td><td>—</td><td class="price">$94.47</td><td>Touch bar</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="sources">Sources: Magedok store pages and products.json · Amazon and Newegg T101F listings (titles and rating counts; prices not fetched) · Adafruit product pages · Waveshare pages via search, PiShop and Welectron · LESOWN store products.json and Walmart listings · Raspberry Pi pricing news and reseller pages · Anker charger listings · Sunshine, Virtual Display Driver and Moonlight repositories · Miracast adapter roundups · LibreHardwareMonitor and PSVirtualDesktop docs.</p>
+    </section>
+  </main>
+</div>

@@ -1,0 +1,150 @@
+{
+  "port": 4400,
+  "poll_ms": 500,
+  "panel_resolution": [
+    1540,
+    720
+  ],
+  "kiosk": true,
+  "right_side": "three",
+  "panel_position": "above",
+  "keep_panel_for_dock": true,
+  "feeds": [
+    {
+      "id": "feed-1",
+      "title": "AI chats",
+      "source": "ai",
+      "limit": 6
+    },
+    {
+      "id": "feed-2",
+      "title": "Slack",
+      "source": "slack",
+      "token": "",
+      "channels": [
+        "dm"
+      ],
+      "limit": 5
+    },
+    {
+      "id": "feed-3",
+      "title": "Teams",
+      "source": "notifications",
+      "apps": [
+        "Microsoft Teams"
+      ],
+      "limit": 5
+    }
+  ],
+  "buttons": [
+    {
+      "id": "space-prev",
+      "label": "Space",
+      "sub": "previous",
+      "glyph": "◀",
+      "type": "hotkey",
+      "keys": [
+        "ctrl",
+        "left"
+      ]
+    },
+    {
+      "id": "space-next",
+      "label": "Space",
+      "sub": "next",
+      "glyph": "▶",
+      "type": "hotkey",
+      "keys": [
+        "ctrl",
+        "right"
+      ]
+    },
+    {
+      "id": "mission",
+      "label": "Mission Control",
+      "sub": "all windows",
+      "glyph": "⧉",
+      "type": "hotkey",
+      "keys": [
+        "ctrl",
+        "up"
+      ]
+    },
+    {
+      "id": "desktop",
+      "label": "Show desktop",
+      "sub": "",
+      "glyph": "▁",
+      "type": "hotkey",
+      "keys": [
+        "f11"
+      ]
+    },
+    {
+      "id": "spotlight",
+      "label": "Spotlight",
+      "sub": "search",
+      "glyph": "⌕",
+      "type": "hotkey",
+      "keys": [
+        "cmd",
+        "space"
+      ]
+    },
+    {
+      "id": "screenshot",
+      "label": "Screenshot",
+      "sub": "to clipboard",
+      "glyph": "✂",
+      "type": "shell",
+      "command": "screencapture -i -c"
+    },
+    {
+      "id": "app1",
+      "label": "Safari",
+      "sub": "open",
+      "glyph": "◎",
+      "type": "app",
+      "app": "Safari"
+    },
+    {
+      "id": "app2",
+      "label": "Terminal",
+      "sub": "open",
+      "glyph": ">_",
+      "type": "app",
+      "app": "Terminal"
+    },
+    {
+      "id": "app3",
+      "label": "Music",
+      "sub": "play / pause",
+      "glyph": "⏯",
+      "type": "applescript",
+      "command": "tell application \"Music\" to playpause"
+    },
+    {
+      "id": "mic",
+      "label": "Mic",
+      "sub": "mute toggle",
+      "glyph": "●",
+      "type": "mic"
+    },
+    {
+      "id": "vol-down",
+      "label": "Volume",
+      "sub": "down",
+      "glyph": "−",
+      "type": "volume",
+      "dir": "down"
+    },
+    {
+      "id": "vol-up",
+      "label": "Volume",
+      "sub": "up",
+      "glyph": "+",
+      "type": "volume",
+      "dir": "up"
+    }
+  ]
+}

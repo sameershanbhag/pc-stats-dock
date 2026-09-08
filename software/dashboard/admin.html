@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stats Dock Admin</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #0A0E0D; --panel: #121917; --panel-2: #182120; --panel-3: #1F2A27; --line: #24302D; --line-2: #33413D;
+    --ink: #E6EBE8; --muted: #8B9793; --dim: #56635F;
+    --accent: #E08C4C; --accent-soft: #3A2919; --teal: #6FBFC6; --teal-soft: #1B3335; --warn: #E2B25A; --bad: #E0645A; --ok: #7CC48B;
+    --display: "Chakra Petch", "Trebuchet MS", sans-serif;
+    --body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+    --mono: "IBM Plex Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5; }
+  a { color: var(--teal); }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  .top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 18px; padding: 12px 22px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .top h1 { font-family: var(--display); font-size: 18px; font-weight: 600; margin: 0; letter-spacing: .04em; }
+  .top h1 small { font-family: var(--mono); font-weight: 400; font-size: 11px; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; margin-left: 10px; }
+  .top .status { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .top .grow { flex: 1; }
+  .btn { font-family: var(--display); font-size: 14px; letter-spacing: .03em; padding: 8px 14px; background: var(--panel-2); border: 1px solid var(--line-2); color: var(--ink); cursor: pointer; }
+  .btn:hover { background: var(--panel-3); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #1A120B; font-weight: 600; }
+  .btn.primary:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.ghost { background: transparent; }
+  .btn.small { padding: 4px 10px; font-size: 12px; }
+  .btn:focus-visible, .tile:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .dirty { color: var(--warn); }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 22px; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); gap: 22px; align-items: start; }
+  @media (max-width: 960px) { .wrap { grid-template-columns: minmax(0, 1fr); } }
+  section.card { background: var(--panel); border: 1px solid var(--line); padding: 16px 18px; display: grid; gap: 12px; }
+  h2 { font-family: var(--display); font-size: 15px; font-weight: 600; margin: 0; letter-spacing: .04em; }
+  .hint { font-size: 13px; color: var(--muted); margin: 0; }
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin: 0; }
+  .pgrid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(4, 96px); gap: 10px; }
+  .tile { position: relative; text-align: left; background: var(--panel-2); border: 1px solid var(--line); border-bottom: 3px solid #2C3A36; padding: 10px 12px; display: grid; grid-template-rows: 1fr auto auto; cursor: grab; font-family: var(--display); }
+  .tile .g { font-size: 26px; line-height: 1; color: var(--accent); }
+  .tile .l { font-size: 16px; font-weight: 600; }
+  .tile .sb { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; min-height: 12px; }
+  .tile .n { position: absolute; top: 6px; right: 8px; font-family: var(--mono); font-size: 10px; color: var(--dim); }
+  .tile.empty { background: transparent; border-style: dashed; color: var(--dim); }
+  .tile.empty .g { color: var(--dim); }
+  .tile.sel { border-color: var(--teal); border-bottom-color: var(--teal); box-shadow: inset 0 0 0 1px var(--teal); }
+  .tile.over { background: var(--teal-soft); }
+  .tile.dragging { opacity: .4; }
+  .field { display: grid; gap: 4px; }
+  .field label { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .field input, .field select, .field textarea { background: var(--bg); border: 1px solid var(--line-2); padding: 8px 10px; color: var(--ink); width: 100%; }
+  .field textarea { min-height: 70px; font-family: var(--mono); font-size: 13px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .row3 { display: grid; grid-template-columns: 2fr 2fr 1fr; gap: 12px; }
+  .mods { display: flex; flex-wrap: wrap; gap: 8px; }
+  .mod { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--line-2); background: var(--bg); cursor: pointer; font-family: var(--display); font-size: 13px; }
+  .mod input { accent-color: var(--accent); }
+  .combo { font-family: var(--display); font-size: 15px; color: var(--ink); min-height: 24px; }
+  .combo span { display: inline-block; padding: 2px 8px; border: 1px solid var(--line-2); background: var(--panel-2); margin-right: 6px; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .msg { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .msg.err { color: var(--bad); } .msg.ok { color: var(--ok); }
+  .hidden { display: none !important; }
+  .lib { display: grid; gap: 6px; max-height: 520px; overflow: auto; padding-right: 4px; }
+  .lib .item { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; background: var(--panel-2); border: 1px solid var(--line); }
+  .lib .item .g { font-size: 20px; color: var(--accent); text-align: center; }
+  .lib .item .t { font-family: var(--display); font-size: 14px; }
+  .lib .item .k { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .search { background: var(--bg); border: 1px solid var(--line-2); padding: 8px 10px; width: 100%; }
+  .note { border-top: 2px solid var(--warn); background: var(--panel-2); padding: 10px 14px; font-size: 13px; }
+  .fe { border: 1px solid var(--line); padding: 12px; display: grid; gap: 10px; background: var(--bg); }
+  .fe .fh { display: flex; justify-content: space-between; align-items: center; }
+  .fe .fh b { font-family: var(--display); font-weight: 600; }
+  .fe .st { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .fe .st.warn { color: var(--warn); } .fe .st.ok { color: var(--ok); }
+  .chk { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 13px; }
+  .chk label { display: inline-flex; gap: 5px; align-items: center; cursor: pointer; }
+  .chk input { accent-color: var(--accent); }
+  .preview { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+  .preview div { padding: 4px 8px; background: var(--panel-2); border-left: 2px solid var(--teal); }
+  .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--line-2); padding: 8px 14px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; } .toast.err { border-color: var(--bad); }
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>Stats Dock<small>admin · mac</small></h1>
+  <span class="status" id="status">connecting…</span>
+  <span class="grow"></span>
+  <a class="btn ghost" href="/" target="_blank" id="openDash">Open dashboard</a>
+  <button class="btn" id="revert" type="button">Revert</button>
+  <button class="btn primary" id="save" type="button" disabled>Save</button>
+</div>
+
+<div class="wrap">
+  <div style="display:grid;gap:22px">
+    <section class="card">
+      <div><p class="eyebrow">Panel buttons</p><h2>Drag to swap places. Click to edit.</h2></div>
+      <div class="pgrid" id="pgrid" aria-label="Panel button layout"></div>
+      <p class="hint">Twelve slots, laid out exactly as on the panel. Empty slots show as blank tiles.</p>
+    </section>
+    <section class="card" id="displayCard">
+      <div><p class="eyebrow">The panel as a display</p><h2>Keep it for the dock only</h2></div>
+      <p class="hint">When the panel is plugged in, macOS may make it the main display and move your windows onto it. With this on, the agent puts your big monitor back as main, parks the panel where you say, and moves stray windows back, every time.</p>
+      <div class="row">
+        <div class="field"><label for="panelPos">Panel sits</label>
+          <select id="panelPos"><option value="above">above the main display</option><option value="below">below the main display</option><option value="left">left of the main display</option><option value="right">right of the main display</option></select></div>
+        <div class="field"><label>&nbsp;</label><label class="mod" style="justify-content:flex-start"><input type="checkbox" id="keepPanel" checked> keep the panel for the dock only</label></div>
+      </div>
+      <div class="actions"><button class="btn" id="arrangeNow" type="button">Fix arrangement now</button><span class="msg" id="arrangeMsg"></span></div>
+      <p class="hint" id="touchState">Touch: checking…</p>
+    </section>
+    <section class="card" id="rightCard">
+      <div><p class="eyebrow">Right side of the panel</p><h2>Buttons, message feeds, or both</h2></div>
+      <div class="field"><label for="rightSide">Layout</label>
+        <select id="rightSide">
+          <option value="three">Three columns: stats · feeds · buttons</option>
+          <option value="three-feeds">Three columns: stats · first feed · other feeds</option>
+          <option value="feeds3">Wide stats · three feeds</option>
+          <option value="feeds">Wide stats · two feeds</option>
+          <option value="mixed">Wide stats · one feed + six buttons</option>
+          <option value="buttons">Wide stats · twelve buttons</option>
+        </select></div>
+      <div id="feedEditors" style="display:grid;gap:14px"></div>
+      <p class="hint">“AI chats” lists every Claude Code, Codex or Cursor turn that finished or is waiting for you; tapping one on the panel jumps to that terminal tab, editor window or app. Install the hooks once with the button in that feed. Slack needs a token from a small app you create at api.slack.com (2 minutes, details in the README). Teams via Microsoft needs an app registration in your tenant and a one-time sign-in. “Notification Center” needs no setup at all: it shows what macOS just notified you about for the chosen apps, after you give “PC Stats Panel” Full Disk Access.</p>
+    </section>
+    <section class="card">
+      <div><p class="eyebrow">Library</p><h2>Ready-made actions</h2></div>
+      <input class="search" id="search" placeholder="Search: space, mission, screenshot, spotify, lock…" aria-label="Search library">
+      <div class="lib" id="lib"></div>
+      <p class="hint">"Put in slot" writes the item into the selected slot. Save afterwards.</p>
+    </section>
+  </div>
+
+  <section class="card" id="editor" style="position:sticky;top:76px">
+    <div><p class="eyebrow" id="edSlot">Slot 1</p><h2>Edit button</h2></div>
+    <div class="row3">
+      <div class="field"><label for="fLabel">Label</label><input id="fLabel" maxlength="16"></div>
+      <div class="field"><label for="fSub">Small text</label><input id="fSub" maxlength="20"></div>
+      <div class="field"><label for="fGlyph">Glyph</label><input id="fGlyph" maxlength="2" placeholder="◀"></div>
+    </div>
+    <div class="field"><label for="fType">Does</label>
+      <select id="fType">
+        <option value="hotkey">Press a key combination</option>
+        <option value="app">Open an app</option>
+        <option value="volume">Volume</option>
+        <option value="mic">Toggle microphone mute</option>
+        <option value="shortcut">Run a Shortcut (Shortcuts app)</option>
+        <option value="applescript">Run AppleScript</option>
+        <option value="shell">Run a shell command</option>
+        <option value="empty">Nothing (blank slot)</option>
+      </select>
+    </div>
+
+    <div id="pHotkey" class="field" style="gap:8px">
+      <label>Combination</label>
+      <div class="mods">
+        <label class="mod"><input type="checkbox" data-mod="cmd"> ⌘ Cmd</label>
+        <label class="mod"><input type="checkbox" data-mod="ctrl"> ⌃ Ctrl</label>
+        <label class="mod"><input type="checkbox" data-mod="alt"> ⌥ Option</label>
+        <label class="mod"><input type="checkbox" data-mod="shift"> ⇧ Shift</label>
+      </div>
+      <div class="row">
+        <div class="field"><label for="fKey">Key</label><input id="fKey" list="keyNames" placeholder="left, up, space, d, f11…"><datalist id="keyNames"></datalist></div>
+        <div class="field"><label>Result</label><div class="combo" id="combo"></div></div>
+      </div>
+      <p class="hint">Click the Key box and press the combination you mean; it is captured with its modifiers. Key buttons need “PC Stats Panel” switched on under System Settings › Privacy & Security › Accessibility (macOS asks once).</p>
+    </div>
+    <div id="pApp" class="field hidden"><label for="fApp">App name</label><input id="fApp" placeholder="Safari, Slack, Spotify, or a bundle id like com.apple.Terminal"></div>
+    <div id="pVolume" class="field hidden"><label for="fDir">Direction</label>
+      <select id="fDir"><option value="up">Up</option><option value="down">Down</option><option value="mute">Mute toggle</option></select>
+      <p class="hint">System volume. Sound going to a monitor over DisplayPort/HDMI has no system volume; the agent then tries the monitor's DDC volume, and the library has per-app volume buttons for Music and Spotify.</p></div>
+    <div id="pMic" class="hidden"><p class="hint">Sets the microphone input volume to 0 and restores it next tap. The tile turns red while muted.</p></div>
+    <div id="pShortcut" class="field hidden"><label for="fName">Shortcut name</label><input id="fName" placeholder="exactly as it appears in the Shortcuts app"></div>
+    <div id="pApplescript" class="field hidden"><label for="fAs">AppleScript</label><textarea id="fAs" placeholder='tell application "Spotify" to playpause'></textarea></div>
+    <div id="pShell" class="field hidden"><label for="fCmd">Shell command (zsh)</label><textarea id="fCmd" placeholder="screencapture -i -c"></textarea></div>
+
+    <div class="actions">
+      <button class="btn" id="test" type="button">Test now</button>
+      <button class="btn small" id="moveL" type="button" title="Swap with previous slot">◀ slot</button>
+      <button class="btn small" id="moveR" type="button" title="Swap with next slot">slot ▶</button>
+      <button class="btn small ghost" id="clear" type="button">Clear slot</button>
+      <span class="msg" id="msg"></span>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const SLOTS = 12, MODS = ['cmd', 'ctrl', 'alt', 'shift'];
+  const KEY_ALIASES = { command: 'cmd', meta: 'cmd', control: 'ctrl', option: 'alt', arrowleft: 'left', arrowright: 'right', arrowup: 'up', arrowdown: 'down', '←': 'left', '→': 'right', '↑': 'up', '↓': 'down', escape: 'esc', return: 'enter', ' ': 'space', backspace: 'delete', del: 'forwarddelete' };
+  const SPECIAL = ['left','right','up','down','tab','space','enter','esc','delete','forwarddelete','home','end','pageup','pagedown','f1','f2','f3','f4','f5','f6','f7','f8','f9','f10','f11','f12','f13','f14','f15','f16','f17','f18','f19','f20'];
+  const KEYS = [...SPECIAL, ...'abcdefghijklmnopqrstuvwxyz0123456789'.split(''), '.', ',', '-', '=', '/', '\\', ';', "'", '[', ']', '`'];
+  const NICE = { cmd: '⌘', ctrl: '⌃', alt: '⌥', shift: '⇧', left: '←', right: '→', up: '↑', down: '↓', esc: 'Esc', enter: '↩', tab: '⇥', space: 'Space', delete: '⌫', forwarddelete: '⌦' };
+  $('keyNames').innerHTML = KEYS.map(k => `<option value="${k}">`).join('');
+
+  const LIBRARY = [
+    { label: 'Space', sub: 'previous', glyph: '◀', type: 'hotkey', keys: ['ctrl','left'] },
+    { label: 'Space', sub: 'next', glyph: '▶', type: 'hotkey', keys: ['ctrl','right'] },
+    { label: 'Mission Control', sub: 'all windows', glyph: '⧉', type: 'hotkey', keys: ['ctrl','up'] },
+    { label: 'App windows', sub: 'App Exposé', glyph: '⧈', type: 'hotkey', keys: ['ctrl','down'] },
+    { label: 'Show desktop', sub: '', glyph: '▁', type: 'hotkey', keys: ['f11'] },
+    { label: 'Launchpad', sub: '', glyph: '⊞', type: 'app', app: 'Launchpad' },
+    { label: 'Spotlight', sub: 'search', glyph: '⌕', type: 'hotkey', keys: ['cmd','space'] },
+    { label: 'Switch app', sub: 'Cmd+Tab', glyph: '⇄', type: 'hotkey', keys: ['cmd','tab'] },
+    { label: 'Hide app', sub: 'current', glyph: '▾', type: 'hotkey', keys: ['cmd','h'] },
+    { label: 'Full screen', sub: 'toggle', glyph: '⛶', type: 'hotkey', keys: ['ctrl','cmd','f'] },
+    { label: 'Lock screen', sub: '', glyph: '🔒', type: 'hotkey', keys: ['ctrl','cmd','q'] },
+    { label: 'Screenshot', sub: 'area → clipboard', glyph: '✂', type: 'shell', command: 'screencapture -i -c' },
+    { label: 'Screenshot', sub: 'area → Desktop', glyph: '📷', type: 'shell', command: 'screencapture -i ~/Desktop/shot-$(date +%H%M%S).png' },
+    { label: 'Emoji', sub: 'picker', glyph: '😀', type: 'hotkey', keys: ['ctrl','cmd','space'] },
+    { label: 'Notification Center', sub: '', glyph: '🔔', type: 'shell', command: 'open -b com.apple.notificationcenterui' },
+    { label: 'Do Not Disturb', sub: 'needs a Shortcut named this', glyph: '🌙', type: 'shortcut', name: 'Toggle Do Not Disturb' },
+    { label: 'Play / Pause', sub: 'Music', glyph: '⏯', type: 'applescript', command: 'tell application "Music" to playpause' },
+    { label: 'Play / Pause', sub: 'Spotify', glyph: '⏯', type: 'applescript', command: 'tell application "Spotify" to playpause' },
+    { label: 'Next track', sub: 'Spotify', glyph: '⏭', type: 'applescript', command: 'tell application "Spotify" to next track' },
+    { label: 'Previous', sub: 'Spotify', glyph: '⏮', type: 'applescript', command: 'tell application "Spotify" to previous track' },
+    { label: 'Volume', sub: 'up', glyph: '+', type: 'volume', dir: 'up' },
+    { label: 'Volume', sub: 'down', glyph: '−', type: 'volume', dir: 'down' },
+    { label: 'Speakers', sub: 'mute', glyph: '🔇', type: 'volume', dir: 'mute' },
+    { label: 'Music', sub: 'volume up (app)', glyph: '♪+', type: 'applescript', command: 'tell application "Music" to set sound volume to (sound volume + 10)' },
+    { label: 'Music', sub: 'volume down (app)', glyph: '♪−', type: 'applescript', command: 'tell application "Music" to set sound volume to (sound volume - 10)' },
+    { label: 'Spotify', sub: 'volume up (app)', glyph: '♫+', type: 'applescript', command: 'tell application "Spotify" to set sound volume to (sound volume + 10)' },
+    { label: 'Spotify', sub: 'volume down (app)', glyph: '♫−', type: 'applescript', command: 'tell application "Spotify" to set sound volume to (sound volume - 10)' },
+    { label: 'Mic', sub: 'mute toggle', glyph: '🎙', type: 'mic' },
+    { label: 'Zoom', sub: 'mute (Cmd+Shift+A)', glyph: '🎧', type: 'hotkey', keys: ['cmd','shift','a'] },
+    { label: 'Discord', sub: 'mute (Cmd+Shift+M)', glyph: '🎧', type: 'hotkey', keys: ['cmd','shift','m'] },
+    { label: 'Safari', sub: 'open', glyph: '◎', type: 'app', app: 'Safari' },
+    { label: 'Chrome', sub: 'open', glyph: '◉', type: 'app', app: 'Google Chrome' },
+    { label: 'Terminal', sub: 'open', glyph: '>_', type: 'app', app: 'Terminal' },
+    { label: 'Slack', sub: 'open', glyph: '#', type: 'app', app: 'Slack' },
+    { label: 'Messages', sub: 'open', glyph: '💬', type: 'app', app: 'Messages' },
+    { label: 'Activity Monitor', sub: 'open', glyph: '📈', type: 'app', app: 'Activity Monitor' },
+    { label: 'Sleep display', sub: '', glyph: '🌑', type: 'shell', command: 'pmset displaysleepnow' },
+    { label: 'Empty Trash', sub: '', glyph: '🗑', type: 'applescript', command: 'tell application "Finder" to empty trash' },
+    { label: 'Open…', sub: 'any app', glyph: '▶', type: 'app', app: '' },
+    { label: 'Shortcut…', sub: 'anything from Shortcuts', glyph: '⚡', type: 'shortcut', name: '' },
+    { label: 'Shell…', sub: 'a command', glyph: '>', type: 'shell', command: '' },
+  ];
+
+  const EMPTY = () => ({ id: '', label: '', sub: '', glyph: '', type: 'empty' });
+  let buttons = [], saved = '', selected = 0, standalone = false;
+  // ---- right side: layout + two feeds ----
+  const PRESETS = ['Slack', 'Microsoft Teams', 'Messages', 'Mail', 'Discord', 'WhatsApp', 'Telegram'];
+  const DEFAULT_FEEDS = [{ id: 'feed-1', title: 'AI chats', source: 'ai', limit: 6 }, { id: 'feed-2', title: 'Slack', source: 'slack', channels: ['dm'], limit: 5, has_token: false }, { id: 'feed-3', title: 'Teams', source: 'notifications', apps: ['Microsoft Teams'], limit: 5 }];
+  let feeds = [], rightSide = 'feeds', savedRight = '';
+  const rightState = () => JSON.stringify({ rightSide, feeds });
+  const rightDirty = () => rightState() !== savedRight;
+  function normFeeds(list) {
+    const out = (list || []).slice(0, 3).map(f => ({ ...f }));
+    while (out.length < 3) out.push({ ...DEFAULT_FEEDS[out.length], token: '' });
+    return out.map((f, i) => ({ id: 'feed-' + (i + 1), title: f.title || '', source: f.source || 'none', limit: f.limit || 8, token: '', has_token: !!f.has_token,
+      channels: Array.isArray(f.channels) ? f.channels : (f.channels ? String(f.channels).split(/[\s,]+/) : []), tenant: f.tenant || 'common', client_id: f.client_id || '', apps: f.apps || [] }));
+  }
+  function renderFeedEditors() {
+    $('rightSide').value = rightSide;
+    const box = $('feedEditors'); box.innerHTML = '';
+    const count = ({ buttons: 0, mixed: 1, feeds: 2, feeds3: 3, three: 3, 'three-feeds': 3 })[rightSide] ?? 3;
+    feeds.slice(0, count).forEach((f, i) => {
+      const el = document.createElement('div'); el.className = 'fe'; el.dataset.i = i;
+      const src = f.source;
+      el.innerHTML = `<div class="fh"><b>Feed ${i + 1}</b><span class="st" data-st></span></div>
+        <div class="row"><div class="field"><label>Title</label><input data-k="title" value="${att(f.title)}" maxlength="24"></div>
+        <div class="field"><label>Source</label><select data-k="source"><option value="none">Nothing</option><option value="ai">AI chats (Claude Code, Codex, Cursor…)</option><option value="slack">Slack (API token)</option><option value="teams">Microsoft Teams (sign in)</option><option value="notifications">Notification Center (any app)</option></select></div></div>
+        ${src === 'ai' ? `<div class="actions"><button class="btn small" type="button" data-act="hooks">Install hooks for Claude Code, Codex, Cursor</button><span class="msg" data-hooks></span></div>
+          <p class="hint">Adds a Stop and a Notification hook to ~/.claude/settings.json (and Codex / Cursor if present). Other tools: run <code>notify.py --tool X --title Done</code> from the app folder when they finish.</p>` : ''}
+        ${src === 'slack' ? `<div class="field"><label>Slack token</label><input data-k="token" type="password" placeholder="${f.has_token ? 'a token is stored; paste a new one to replace it' : 'xoxp-… or xoxb-…'}" autocomplete="off"></div>
+          <div class="field"><label>Channels (comma separated; “dm” = your direct messages)</label><input data-k="channels" value="${att(f.channels.join(', '))}" placeholder="dm, general, platform"></div>` : ''}
+        ${src === 'teams' ? `<div class="row"><div class="field"><label>Tenant</label><input data-k="tenant" value="${att(f.tenant)}" placeholder="common or your tenant id"></div><div class="field"><label>App (client) id</label><input data-k="client_id" value="${att(f.client_id)}" placeholder="from the Azure app registration"></div></div>
+          <div class="actions"><button class="btn small" type="button" data-act="login">Sign in to Microsoft</button><span class="msg" data-login></span></div>` : ''}
+        ${src === 'notifications' ? `<div class="field"><label>Apps</label><div class="chk">${PRESETS.map(p => `<label><input type="checkbox" data-app="${att(p)}" ${f.apps.includes(p) ? 'checked' : ''}> ${p}</label>`).join('')}</div></div>
+          <div class="field"><label>Other bundle ids, optional</label><input data-k="apps_extra" value="${att(f.apps.filter(a => !PRESETS.includes(a)).join(', '))}" placeholder="com.example.chat"></div>
+          <div class="actions"><button class="btn small" type="button" data-act="fda">Open Full Disk Access settings</button><span class="hint">switch on “PC Stats Panel” there</span></div>` : ''}
+        ${src !== 'none' ? `<div class="row"><div class="field"><label>Messages shown</label><input data-k="limit" type="number" min="1" max="20" value="${f.limit}"></div><div class="actions" style="align-self:end"><button class="btn small" type="button" data-act="test">Test</button></div></div><div class="preview" data-preview></div>` : ''}`;
+      el.querySelectorAll('[data-k]').forEach(inp => inp.addEventListener('input', () => { readFeed(el, i); markDirty(); if (inp.dataset.k === 'source') renderFeedEditors(); }));
+      el.querySelectorAll('[data-app]').forEach(c => c.addEventListener('change', () => { readFeed(el, i); markDirty(); }));
+      el.querySelector('[data-k="source"]').value = src;
+      const test = el.querySelector('[data-act="test"]'); if (test) test.addEventListener('click', () => testFeed(i, el));
+      const login = el.querySelector('[data-act="login"]'); if (login) login.addEventListener('click', () => teamsLogin(i, el));
+      const hooksBtn = el.querySelector('[data-act="hooks"]'); if (hooksBtn) hooksBtn.addEventListener('click', async () => {
+        const out = el.querySelector('[data-hooks]'); if (standalone) { say('Preview only.'); return; }
+        out.textContent = 'installing…';
+        try { const j = await api('/api/admin/install-ai-hooks', {}); out.textContent = j.ok ? Object.entries(j.result || {}).filter(([k]) => k !== 'generic').map(([k, v]) => `${k}: ${v}`).join(' · ') : (j.message || 'failed'); out.className = 'msg ' + (j.ok ? 'ok' : 'err'); }
+        catch (e) { out.textContent = 'agent not reachable'; out.className = 'msg err'; }
+      });
+      const fda = el.querySelector('[data-act="fda"]'); if (fda) fda.addEventListener('click', async () => { if (standalone) { say('Preview only.'); return; } await api('/api/admin/open-fda', {}); });
+      box.appendChild(el);
+    });
+  }
+  const att = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  function readFeed(el, i) {
+    const f = feeds[i]; const g = (k) => { const n = el.querySelector(`[data-k="${k}"]`); return n ? n.value : undefined; };
+    f.title = g('title') ?? f.title; f.source = g('source') ?? f.source; if (g('limit') !== undefined) f.limit = +g('limit') || 8;
+    if (g('token') !== undefined) f.token = g('token');
+    if (g('channels') !== undefined) f.channels = g('channels').split(/[\s,]+/).filter(Boolean);
+    if (g('tenant') !== undefined) f.tenant = g('tenant'); if (g('client_id') !== undefined) f.client_id = g('client_id');
+    if (el.querySelector('[data-app]')) f.apps = [...el.querySelectorAll('[data-app]:checked')].map(c => c.dataset.app).concat((g('apps_extra') || '').split(/[\s,]+/).filter(Boolean));
+  }
+  const FEED_STATUS = { ok: 'ok', idle: 'waiting', needs_setup: 'not set up', needs_login: 'needs sign-in', needs_fda: 'needs Full Disk Access', error: 'error' };
+  async function testFeed(i, el) {
+    const st = el.querySelector('[data-st]'), pv = el.querySelector('[data-preview]');
+    if (standalone) { say('Preview only. On the Mac this fetches live messages.'); return; }
+    if (rightDirty()) { say('Save first, then test.', true); return; }
+    st.textContent = 'fetching…'; st.className = 'st';
+    try {
+      const j = await api('/api/feeds/' + feeds[i].id + '/refresh', {}); const f = j.feed || {};
+      st.textContent = (FEED_STATUS[f.status] || f.status) + (f.error ? ' · ' + f.error : ''); st.className = 'st ' + (f.status === 'ok' ? 'ok' : 'warn');
+      pv.innerHTML = (f.items || []).slice(0, 3).map(it => `<div><b>${att(it.who)}</b> · ${att(it.where)} · ${att(it.text)}</div>`).join('') || (f.status === 'ok' ? '<div>No recent messages.</div>' : '');
+    } catch (e) { st.textContent = 'agent not reachable'; st.className = 'st warn'; }
+  }
+  async function teamsLogin(i, el) {
+    const out = el.querySelector('[data-login]');
+    if (standalone) { say('Preview only.'); return; }
+    if (rightDirty()) { say('Save first, then sign in.', true); return; }
+    try {
+      const j = await api('/api/feeds/' + feeds[i].id + '/login', {});
+      if (!j.ok) { out.textContent = j.message; out.className = 'msg err'; return; }
+      out.textContent = `Enter code ${j.user_code} at ${j.url} (opened in your browser)…`; out.className = 'msg';
+      const poll = setInterval(async () => {
+        const r = await (await fetch('/api/feeds/' + feeds[i].id + '/login', { cache: 'no-store' })).json();
+        if (r.state === 'signed_in') { clearInterval(poll); out.textContent = 'Signed in.'; out.className = 'msg ok'; }
+        else if (r.state === 'failed' || r.state === 'expired') { clearInterval(poll); out.textContent = r.error || r.state; out.className = 'msg err'; }
+      }, 4000);
+    } catch (e) { out.textContent = 'agent not reachable'; out.className = 'msg err'; }
+  }
+  $('rightSide').addEventListener('change', () => { rightSide = $('rightSide').value; renderFeedEditors(); markDirty(); });
+  async function arrangeNow() {
+    const out = $('arrangeMsg'); if (standalone) { say('Preview only.'); return; }
+    out.textContent = 'arranging…'; out.className = 'msg';
+    try { const j = await api('/api/admin/arrange', { position: $('panelPos').value, keep: $('keepPanel').checked }); out.textContent = j.message; out.className = 'msg ' + (j.changed ? 'ok' : ''); }
+    catch (e) { out.textContent = 'agent not reachable'; out.className = 'msg err'; }
+  }
+  $('arrangeNow').addEventListener('click', arrangeNow);
+  async function touchState() {
+    const el = $('touchState');
+    try {
+      const h = await (await fetch('/api/health', { cache: 'no-store' })).json();
+      const t = h.touch || { state: 'off' }, p = h.panel || {};
+      const words = { mapped: 'Touch: mapped onto the panel' + (t.device ? ' (' + t.device + ')' : ''),
+                      'needs accessibility': 'Touch: needs the Accessibility permission (same switch as the key buttons)',
+                      'no touchscreen': 'Touch: no USB touchscreen found — is the panel’s USB cable connected?',
+                      starting: 'Touch: starting…', 'waiting for panel': 'Touch: waiting for the panel',
+                      error: 'Touch: ' + (t.note || 'error'), off: 'Touch: ' + (t.note || (p.connected ? 'off' : 'panel not connected')) };
+      el.textContent = words[t.state] || ('Touch: ' + t.state);
+      el.className = 'hint' + (t.state === 'needs accessibility' || t.state === 'error' ? ' dirty' : '');
+    } catch (e) { el.textContent = 'Touch: agent not reachable'; }
+  }
+  touchState(); setInterval(touchState, 5000);
+  $('panelPos').addEventListener('change', arrangeNow);
+  $('keepPanel').addEventListener('change', arrangeNow);
+  const norm = (list) => { const b = (list || []).slice(0, SLOTS).map(x => ({ ...x })); while (b.length < SLOTS) b.push(EMPTY()); return b; };
+  const isDirty = () => JSON.stringify(buttons) !== saved || rightDirty();
+  function markDirty() { $('save').disabled = standalone || !isDirty(); $('status').innerHTML = (standalone ? 'preview only · not connected to the agent' : 'connected to the agent') + (isDirty() ? ' · <span class="dirty">unsaved changes</span>' : ''); }
+  const slotId = (i) => 'slot-' + (i + 1);
+
+  function renderGrid() {
+    const g = $('pgrid'); g.innerHTML = '';
+    buttons.forEach((b, i) => {
+      const t = document.createElement('button');
+      t.type = 'button'; t.className = 'tile' + (b.type === 'empty' ? ' empty' : '') + (i === selected ? ' sel' : ''); t.draggable = true;
+      t.innerHTML = `<span class="n">${i + 1}</span><span class="g">${b.type === 'empty' ? '·' : (b.glyph || '')}</span><span class="l">${b.type === 'empty' ? 'empty' : (b.label || '—')}</span><span class="sb">${b.type === 'empty' ? '' : (b.sub || '')}</span>`;
+      t.addEventListener('click', () => select(i));
+      t.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', i); t.classList.add('dragging'); });
+      t.addEventListener('dragend', () => t.classList.remove('dragging'));
+      t.addEventListener('dragover', (e) => { e.preventDefault(); t.classList.add('over'); });
+      t.addEventListener('dragleave', () => t.classList.remove('over'));
+      t.addEventListener('drop', (e) => { e.preventDefault(); t.classList.remove('over'); swap(+e.dataTransfer.getData('text/plain'), i); select(i); });
+      g.appendChild(t);
+    });
+  }
+  function swap(a, b) { if (a === b) return; [buttons[a], buttons[b]] = [buttons[b], buttons[a]]; renderGrid(); markDirty(); }
+
+  const panes = { hotkey: 'pHotkey', app: 'pApp', volume: 'pVolume', mic: 'pMic', shortcut: 'pShortcut', applescript: 'pApplescript', shell: 'pShell', empty: null };
+  function select(i) { selected = i; renderGrid(); loadEditor(); renderLib($('search').value.trim().toLowerCase()); }
+  function loadEditor() {
+    const b = buttons[selected];
+    $('edSlot').textContent = 'Slot ' + (selected + 1);
+    $('fLabel').value = b.label || ''; $('fSub').value = b.sub || ''; $('fGlyph').value = b.glyph || ''; $('fType').value = b.type || 'empty';
+    const keys = b.keys || [];
+    document.querySelectorAll('[data-mod]').forEach(c => c.checked = keys.includes(c.dataset.mod));
+    $('fKey').value = keys.filter(k => !MODS.includes(k)).pop() || '';
+    $('fApp').value = b.app || ''; $('fDir').value = b.dir || 'up'; $('fName').value = b.name || '';
+    $('fAs').value = b.type === 'applescript' ? (b.command || '') : ''; $('fCmd').value = b.type === 'shell' ? (b.command || '') : '';
+    showPane(); renderCombo(); $('msg').textContent = '';
+  }
+  function showPane() { const t = $('fType').value; Object.entries(panes).forEach(([k, id]) => { if (id) $(id).classList.toggle('hidden', k !== t); }); }
+  function currentKeys() {
+    const mods = [...document.querySelectorAll('[data-mod]')].filter(c => c.checked).map(c => c.dataset.mod);
+    let k = $('fKey').value.trim().toLowerCase(); k = KEY_ALIASES[k] || k;
+    return k ? [...mods, k] : mods;
+  }
+  function renderCombo() { $('combo').innerHTML = currentKeys().map(k => `<span>${NICE[k] || k.toUpperCase()}</span>`).join('') || '<span style="color:var(--dim)">nothing yet</span>'; }
+  function readEditor() {
+    const t = $('fType').value;
+    if (t === 'empty') return EMPTY();
+    const b = { id: buttons[selected].id || slotId(selected), label: $('fLabel').value.trim(), sub: $('fSub').value.trim(), glyph: $('fGlyph').value.trim(), type: t };
+    if (t === 'hotkey') b.keys = currentKeys();
+    if (t === 'app') b.app = $('fApp').value.trim();
+    if (t === 'volume') b.dir = $('fDir').value;
+    if (t === 'shortcut') b.name = $('fName').value.trim();
+    if (t === 'applescript') b.command = $('fAs').value;
+    if (t === 'shell') b.command = $('fCmd').value;
+    return b;
+  }
+  function validate(b) {
+    if (b.type === 'empty') return null;
+    if (!b.label) return 'Give it a label.';
+    if (b.type === 'hotkey') { const k = b.keys.filter(x => !MODS.includes(x)); if (!k.length) return 'Pick a key.'; if (!KEYS.includes(k[0])) return `Unknown key "${k[0]}".`; }
+    if (b.type === 'app' && !b.app) return 'Enter an app name.';
+    if (b.type === 'shortcut' && !b.name) return "Enter the Shortcut's name.";
+    if ((b.type === 'applescript' || b.type === 'shell') && !(b.command || '').trim()) return 'Enter a command.';
+    return null;
+  }
+  function commitEditor() {
+    const b = readEditor(); const err = validate(b);
+    $('msg').textContent = err || ''; $('msg').className = 'msg' + (err ? ' err' : '');
+    buttons[selected] = b; renderGrid(); markDirty(); return !err;
+  }
+  ['fLabel','fSub','fGlyph','fApp','fName','fAs','fCmd'].forEach(id => $(id).addEventListener('input', commitEditor));
+  ['fType','fDir'].forEach(id => $(id).addEventListener('change', () => { showPane(); commitEditor(); }));
+  document.querySelectorAll('[data-mod]').forEach(c => c.addEventListener('change', () => { renderCombo(); commitEditor(); }));
+  $('fKey').addEventListener('input', () => { renderCombo(); commitEditor(); });
+  $('fKey').addEventListener('keydown', (e) => {
+    if (e.key === 'Tab' && !e.metaKey && !e.ctrlKey && !e.altKey) return;
+    e.preventDefault();
+    let k = e.key.toLowerCase(); k = KEY_ALIASES[k] || k;
+    if (['control','shift','alt','meta','ctrl','cmd'].includes(k)) return;
+    if (e.code && /^F\d{1,2}$/.test(e.code)) k = e.code.toLowerCase();
+    if (e.code && /^Digit\d$/.test(e.code)) k = e.code.slice(5);
+    if (e.code && /^Key[A-Z]$/.test(e.code)) k = e.code.slice(3).toLowerCase();
+    $('fKey').value = k;
+    document.querySelector('[data-mod="cmd"]').checked = e.metaKey; document.querySelector('[data-mod="ctrl"]').checked = e.ctrlKey;
+    document.querySelector('[data-mod="alt"]').checked = e.altKey; document.querySelector('[data-mod="shift"]').checked = e.shiftKey;
+    renderCombo(); commitEditor();
+  });
+  $('moveL').addEventListener('click', () => { if (selected > 0) { swap(selected, selected - 1); select(selected - 1); } });
+  $('moveR').addEventListener('click', () => { if (selected < SLOTS - 1) { swap(selected, selected + 1); select(selected + 1); } });
+  $('clear').addEventListener('click', () => { buttons[selected] = EMPTY(); loadEditor(); renderGrid(); markDirty(); });
+
+  async function api(path, body) { const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); return r.json(); }
+  const describe = (b) => b.type === 'hotkey' ? (b.keys || []).map(k => NICE[k] || k.toUpperCase()).join(' ') : b.type === 'app' ? 'open ' + (b.app || '…') : b.type === 'volume' ? 'volume ' + b.dir : b.type === 'mic' ? 'toggle mic' : b.type === 'shortcut' ? 'shortcut ' + (b.name || '…') : b.type === 'applescript' ? 'AppleScript' : b.type === 'shell' ? (b.command || 'shell') : '';
+  $('test').addEventListener('click', async () => {
+    const b = readEditor(); const err = validate(b); if (err) { say(err, true); return; }
+    if (standalone) { say('Preview only. On the Mac this would: ' + describe(b)); return; }
+    try { const j = await api('/api/action', b); say(j.message || (j.ok ? 'done' : 'failed'), !j.ok); } catch (e) { say('agent not reachable', true); }
+  });
+  $('save').addEventListener('click', async () => {
+    if (!commitEditor()) return;
+    const problems = buttons.map((b, i) => [i, validate(b)]).filter(([, e]) => e);
+    if (problems.length) { select(problems[0][0]); say(`Slot ${problems[0][0] + 1}: ${problems[0][1]}`, true); return; }
+    try {
+      const j = await api('/api/admin/config', { buttons }); if (!j.ok) { say(j.message || 'save failed', true); return; }
+      saved = JSON.stringify(buttons);
+      const payload = { right_side: rightSide, feeds: feeds.map(f => ({ ...f })) };
+      const k = await api('/api/admin/feeds', payload); if (!k.ok) { say(k.message || 'save failed', true); markDirty(); return; }
+      feeds = normFeeds(k.feeds); rightSide = k.right_side; savedRight = rightState(); renderFeedEditors(); markDirty();
+      say('Saved. The panel picks it up within a few seconds.');
+    } catch (e) { say('agent not reachable', true); }
+  });
+  $('revert').addEventListener('click', () => { buttons = norm(JSON.parse(saved)); const r = JSON.parse(savedRight); rightSide = r.rightSide; feeds = r.feeds; renderFeedEditors(); select(Math.min(selected, SLOTS - 1)); markDirty(); });
+
+  function renderLib(q) {
+    const box = $('lib'); box.innerHTML = '';
+    LIBRARY.filter(it => !q || (it.label + ' ' + it.sub + ' ' + (it.keys || []).join(' ') + ' ' + (it.app || '')).toLowerCase().includes(q)).forEach(it => {
+      const el = document.createElement('div'); el.className = 'item';
+      el.innerHTML = `<span class="g">${it.glyph}</span><span><div class="t">${it.label} <span style="color:var(--muted);font-weight:400">${it.sub}</span></div><div class="k">${describe(it)}</div></span>`;
+      const b = document.createElement('button'); b.className = 'btn small'; b.type = 'button'; b.textContent = 'Put in slot ' + (selected + 1);
+      b.addEventListener('click', () => { buttons[selected] = { ...it, id: slotId(selected) }; loadEditor(); renderGrid(); markDirty(); say(`${it.label} → slot ${selected + 1}`); });
+      el.appendChild(b); box.appendChild(el);
+    });
+  }
+  $('search').addEventListener('input', () => renderLib($('search').value.trim().toLowerCase()));
+
+  const toast = $('toast'); let tt;
+  function say(m, err) { toast.textContent = m; toast.className = 'toast show' + (err ? ' err' : ''); clearTimeout(tt); tt = setTimeout(() => toast.className = 'toast', 2200); }
+  window.addEventListener('beforeunload', (e) => { if (isDirty() && !standalone) { e.preventDefault(); e.returnValue = ''; } });
+
+  async function boot() {
+    try { const cfg = await (await fetch('/api/config', { cache: 'no-store' })).json(); buttons = norm(cfg.buttons); rightSide = cfg.right_side || 'feeds'; feeds = normFeeds(cfg.feeds); $('panelPos').value = cfg.panel_position || 'above'; $('keepPanel').checked = cfg.keep_panel_for_dock !== false; }
+    catch (e) {
+      standalone = true; rightSide = 'three'; feeds = normFeeds(DEFAULT_FEEDS);
+      buttons = norm([LIBRARY[0], LIBRARY[1], LIBRARY[2], LIBRARY[4], LIBRARY[6], LIBRARY[11], LIBRARY[26], LIBRARY[28], LIBRARY[16], LIBRARY[23], LIBRARY[21], LIBRARY[20]]);
+      $('openDash').classList.add('hidden');
+      const n = document.createElement('div'); n.className = 'note'; n.textContent = 'Preview mode: the agent is not running here, so Save is disabled and Test only describes the action. On the Mac this page is http://localhost:4400/admin.';
+      document.querySelector('.wrap').prepend(n); n.style.gridColumn = '1 / -1';
+    }
+    saved = JSON.stringify(buttons); savedRight = rightState(); renderFeedEditors(); select(0); markDirty();
+  }
+  boot();
+})();
+</script>
+</body>
+</html>

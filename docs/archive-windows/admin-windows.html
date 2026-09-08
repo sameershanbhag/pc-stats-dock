@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stats Dock Admin</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #0A0E0D; --panel: #121917; --panel-2: #182120; --panel-3: #1F2A27; --line: #24302D; --line-2: #33413D;
+    --ink: #E6EBE8; --muted: #8B9793; --dim: #56635F;
+    --accent: #E08C4C; --accent-soft: #3A2919; --teal: #6FBFC6; --teal-soft: #1B3335; --warn: #E2B25A; --bad: #E0645A; --ok: #7CC48B;
+    --display: "Chakra Petch", "Trebuchet MS", sans-serif;
+    --body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+    --mono: "IBM Plex Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5; }
+  a { color: var(--teal); }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  .top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 18px; padding: 12px 22px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .top h1 { font-family: var(--display); font-size: 18px; font-weight: 600; margin: 0; letter-spacing: .04em; }
+  .top h1 small { font-family: var(--mono); font-weight: 400; font-size: 11px; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; margin-left: 10px; }
+  .top .status { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .top .grow { flex: 1; }
+  .btn { font-family: var(--display); font-size: 14px; letter-spacing: .03em; padding: 8px 14px; background: var(--panel-2); border: 1px solid var(--line-2); color: var(--ink); cursor: pointer; }
+  .btn:hover { background: var(--panel-3); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #1A120B; font-weight: 600; }
+  .btn.primary:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.ghost { background: transparent; }
+  .btn.small { padding: 4px 10px; font-size: 12px; }
+  .btn:focus-visible, .tile:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .dirty { color: var(--warn); }
+
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 22px; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); gap: 22px; align-items: start; }
+  @media (max-width: 960px) { .wrap { grid-template-columns: minmax(0, 1fr); } }
+  section.card { background: var(--panel); border: 1px solid var(--line); padding: 16px 18px; display: grid; gap: 12px; }
+  h2 { font-family: var(--display); font-size: 15px; font-weight: 600; margin: 0; letter-spacing: .04em; }
+  .hint { font-size: 13px; color: var(--muted); margin: 0; }
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin: 0; }
+
+  /* the 3x4 grid, same proportions as the panel */
+  .pgrid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(4, 96px); gap: 10px; }
+  .tile { position: relative; text-align: left; background: var(--panel-2); border: 1px solid var(--line); border-bottom: 3px solid #2C3A36; padding: 10px 12px; display: grid; grid-template-rows: 1fr auto auto; cursor: grab; font-family: var(--display); }
+  .tile .g { font-size: 26px; line-height: 1; color: var(--accent); }
+  .tile .l { font-size: 16px; font-weight: 600; }
+  .tile .sb { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; min-height: 12px; }
+  .tile .n { position: absolute; top: 6px; right: 8px; font-family: var(--mono); font-size: 10px; color: var(--dim); }
+  .tile.empty { background: transparent; border-style: dashed; color: var(--dim); }
+  .tile.empty .g { color: var(--dim); }
+  .tile.sel { border-color: var(--teal); border-bottom-color: var(--teal); box-shadow: inset 0 0 0 1px var(--teal); }
+  .tile.over { background: var(--teal-soft); }
+  .tile.dragging { opacity: .4; }
+
+  .field { display: grid; gap: 4px; }
+  .field label { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .field input, .field select, .field textarea { background: var(--bg); border: 1px solid var(--line-2); padding: 8px 10px; color: var(--ink); width: 100%; }
+  .field textarea { min-height: 70px; font-family: var(--mono); font-size: 13px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .row3 { display: grid; grid-template-columns: 2fr 2fr 1fr; gap: 12px; }
+  .mods { display: flex; flex-wrap: wrap; gap: 8px; }
+  .mod { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--line-2); background: var(--bg); cursor: pointer; font-family: var(--display); font-size: 13px; }
+  .mod input { accent-color: var(--accent); }
+  .combo { font-family: var(--display); font-size: 15px; color: var(--ink); min-height: 24px; }
+  .combo span { display: inline-block; padding: 2px 8px; border: 1px solid var(--line-2); background: var(--panel-2); margin-right: 6px; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .msg { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .msg.err { color: var(--bad); } .msg.ok { color: var(--ok); }
+  .hidden { display: none !important; }
+
+  .lib { display: grid; gap: 6px; max-height: 520px; overflow: auto; padding-right: 4px; }
+  .lib .item { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; background: var(--panel-2); border: 1px solid var(--line); }
+  .lib .item .g { font-size: 20px; color: var(--accent); text-align: center; }
+  .lib .item .t { font-family: var(--display); font-size: 14px; }
+  .lib .item .k { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .search { background: var(--bg); border: 1px solid var(--line-2); padding: 8px 10px; width: 100%; }
+  .note { border-top: 2px solid var(--warn); background: var(--panel-2); padding: 10px 14px; font-size: 13px; }
+  .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--line-2); padding: 8px 14px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; } .toast.err { border-color: var(--bad); }
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>Stats Dock<small>admin</small></h1>
+  <span class="status" id="status">connecting…</span>
+  <span class="grow"></span>
+  <a class="btn ghost" href="/" target="_blank" id="openDash">Open dashboard</a>
+  <button class="btn" id="revert" type="button">Revert</button>
+  <button class="btn primary" id="save" type="button" disabled>Save</button>
+</div>
+
+<div class="wrap">
+  <div style="display:grid;gap:22px">
+    <section class="card">
+      <div><p class="eyebrow">Panel buttons</p><h2>Drag to swap places. Click to edit.</h2></div>
+      <div class="pgrid" id="pgrid" aria-label="Panel button layout"></div>
+      <p class="hint">Twelve slots, laid out exactly as on the panel. Empty slots show as blank tiles.</p>
+    </section>
+    <section class="card">
+      <div><p class="eyebrow">Library</p><h2>Ready-made actions</h2></div>
+      <input class="search" id="search" placeholder="Search: desktop, lock, screenshot, media…" aria-label="Search library">
+      <div class="lib" id="lib"></div>
+      <p class="hint">"Put in slot" writes the item into the selected slot. Save afterwards.</p>
+    </section>
+  </div>
+
+  <section class="card" id="editor" style="position:sticky;top:76px">
+    <div><p class="eyebrow" id="edSlot">Slot 1</p><h2 id="edTitle">Edit button</h2></div>
+    <div class="row3">
+      <div class="field"><label for="fLabel">Label</label><input id="fLabel" maxlength="16"></div>
+      <div class="field"><label for="fSub">Small text</label><input id="fSub" maxlength="20"></div>
+      <div class="field"><label for="fGlyph">Glyph</label><input id="fGlyph" maxlength="2" placeholder="◀"></div>
+    </div>
+    <div class="field"><label for="fType">Does</label>
+      <select id="fType">
+        <option value="hotkey">Press a key combination</option>
+        <option value="launch">Open a program or file</option>
+        <option value="volume">Volume</option>
+        <option value="mic">Toggle microphone mute</option>
+        <option value="powershell">Run a PowerShell command</option>
+        <option value="empty">Nothing (blank slot)</option>
+      </select>
+    </div>
+
+    <div id="pHotkey" class="field" style="gap:8px">
+      <label>Combination</label>
+      <div class="mods">
+        <label class="mod"><input type="checkbox" data-mod="win"> Win</label>
+        <label class="mod"><input type="checkbox" data-mod="ctrl"> Ctrl</label>
+        <label class="mod"><input type="checkbox" data-mod="alt"> Alt</label>
+        <label class="mod"><input type="checkbox" data-mod="shift"> Shift</label>
+      </div>
+      <div class="row">
+        <div class="field"><label for="fKey">Key</label><input id="fKey" list="keyNames" placeholder="left, tab, d, f13, playpause…"><datalist id="keyNames"></datalist></div>
+        <div class="field"><label>Result</label><div class="combo" id="combo"></div></div>
+      </div>
+      <p class="hint">Or click the Key box and press the key you mean (works for everything except the Win key, tick that instead).</p>
+    </div>
+    <div id="pLaunch" class="field hidden" style="gap:10px">
+      <div class="field"><label for="fPath">Path</label><input id="fPath" placeholder="C:\Users\you\AppData\Local\Discord\Update.exe"></div>
+      <div class="field"><label for="fArgs">Arguments, optional</label><input id="fArgs" placeholder="--processStart Discord.exe"></div>
+      <p class="hint">Tip: right-click a Start-menu shortcut → Properties → copy Target.</p>
+    </div>
+    <div id="pVolume" class="field hidden"><label for="fDir">Direction</label>
+      <select id="fDir"><option value="up">Up</option><option value="down">Down</option><option value="mute">Mute toggle</option></select></div>
+    <div id="pMic" class="hidden"><p class="hint">Toggles the default microphone. The tile turns red while muted.</p></div>
+    <div id="pPs" class="field hidden"><label for="fCmd">Command</label><textarea id="fCmd" placeholder="Start-Process obs64.exe"></textarea></div>
+
+    <div class="actions">
+      <button class="btn" id="test" type="button">Test now</button>
+      <button class="btn small" id="moveL" type="button" title="Swap with previous slot">◀ slot</button>
+      <button class="btn small" id="moveR" type="button" title="Swap with next slot">slot ▶</button>
+      <button class="btn small ghost" id="clear" type="button">Clear slot</button>
+      <span class="msg" id="msg"></span>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const SLOTS = 12;
+  const KEY_ALIASES = { windows: 'win', meta: 'win', super: 'win', control: 'ctrl', option: 'alt', arrowleft: 'left', arrowright: 'right', arrowup: 'up', arrowdown: 'down', '←': 'left', '→': 'right', '↑': 'up', '↓': 'down', escape: 'esc', return: 'enter', ' ': 'space', print: 'printscreen', prtsc: 'printscreen', del: 'delete' };
+  const KEYS = ['left','right','up','down','tab','enter','space','esc','backspace','delete','home','end','pageup','pagedown','insert','printscreen','pause','capslock',
+    'f1','f2','f3','f4','f5','f6','f7','f8','f9','f10','f11','f12','f13','f14','f15','f16','f17','f18','f19','f20','f21','f22','f23','f24',
+    'playpause','nexttrack','prevtrack','stop','volumemute','volumeup','volumedown','browserback','browserforward','browserhome','browsersearch',
+    ...'abcdefghijklmnopqrstuvwxyz0123456789'.split(''), '.', ',', '-', '=', '/', '\\', ';', "'", '[', ']', '`'];
+  const NICE = { win: 'Win', ctrl: 'Ctrl', alt: 'Alt', shift: 'Shift', left: '←', right: '→', up: '↑', down: '↓', printscreen: 'PrtSc', esc: 'Esc', enter: 'Enter', tab: 'Tab', space: 'Space', playpause: 'Play/Pause', nexttrack: 'Next', prevtrack: 'Prev', volumemute: 'Mute', volumeup: 'Vol+', volumedown: 'Vol−' };
+  $('keyNames').innerHTML = KEYS.map(k => `<option value="${k}">`).join('');
+
+  const LIBRARY = [
+    { label: 'Desktop', sub: 'previous', glyph: '◀', type: 'hotkey', keys: ['win','ctrl','left'] },
+    { label: 'Desktop', sub: 'next', glyph: '▶', type: 'hotkey', keys: ['win','ctrl','right'] },
+    { label: 'New desktop', sub: '', glyph: '+', type: 'hotkey', keys: ['win','ctrl','d'] },
+    { label: 'Close desktop', sub: 'current', glyph: '×', type: 'hotkey', keys: ['win','ctrl','f4'] },
+    { label: 'Task View', sub: 'all windows', glyph: '⧉', type: 'hotkey', keys: ['win','tab'] },
+    { label: 'Show desktop', sub: 'minimize all', glyph: '▁', type: 'hotkey', keys: ['win','d'] },
+    { label: 'Snap', sub: 'layouts', glyph: '▦', type: 'hotkey', keys: ['win','z'] },
+    { label: 'Move window', sub: 'to left screen', glyph: '⇤', type: 'hotkey', keys: ['win','shift','left'] },
+    { label: 'Move window', sub: 'to right screen', glyph: '⇥', type: 'hotkey', keys: ['win','shift','right'] },
+    { label: 'Maximize', sub: 'window', glyph: '⬜', type: 'hotkey', keys: ['win','up'] },
+    { label: 'Lock PC', sub: '', glyph: '🔒', type: 'hotkey', keys: ['win','l'] },
+    { label: 'Screenshot', sub: 'snip', glyph: '✂', type: 'hotkey', keys: ['win','shift','s'] },
+    { label: 'Screenshot', sub: 'to file', glyph: '📷', type: 'hotkey', keys: ['win','printscreen'] },
+    { label: 'Clipboard', sub: 'history', glyph: '📋', type: 'hotkey', keys: ['win','v'] },
+    { label: 'Emoji', sub: 'picker', glyph: '😀', type: 'hotkey', keys: ['win','.'] },
+    { label: 'Quick settings', sub: 'wifi · sound', glyph: '⚙', type: 'hotkey', keys: ['win','a'] },
+    { label: 'Notifications', sub: '', glyph: '🔔', type: 'hotkey', keys: ['win','n'] },
+    { label: 'Project', sub: 'display mode', glyph: '🖥', type: 'hotkey', keys: ['win','p'] },
+    { label: 'Explorer', sub: 'files', glyph: '📁', type: 'hotkey', keys: ['win','e'] },
+    { label: 'Settings', sub: '', glyph: '⚙', type: 'hotkey', keys: ['win','i'] },
+    { label: 'Task Manager', sub: '', glyph: '📈', type: 'hotkey', keys: ['ctrl','shift','esc'] },
+    { label: 'Game Bar', sub: '', glyph: '🎮', type: 'hotkey', keys: ['win','g'] },
+    { label: 'Record', sub: 'last 30 s', glyph: '⏺', type: 'hotkey', keys: ['win','alt','g'] },
+    { label: 'Play / Pause', sub: 'media', glyph: '⏯', type: 'hotkey', keys: ['playpause'] },
+    { label: 'Next track', sub: 'media', glyph: '⏭', type: 'hotkey', keys: ['nexttrack'] },
+    { label: 'Previous', sub: 'media', glyph: '⏮', type: 'hotkey', keys: ['prevtrack'] },
+    { label: 'Volume', sub: 'up', glyph: '+', type: 'volume', dir: 'up' },
+    { label: 'Volume', sub: 'down', glyph: '−', type: 'volume', dir: 'down' },
+    { label: 'Speakers', sub: 'mute', glyph: '🔇', type: 'volume', dir: 'mute' },
+    { label: 'Mic', sub: 'mute toggle', glyph: '🎙', type: 'mic' },
+    { label: 'Discord', sub: 'mute (default key)', glyph: '🎧', type: 'hotkey', keys: ['ctrl','shift','m'] },
+    { label: 'Discord', sub: 'deafen (default key)', glyph: '🙉', type: 'hotkey', keys: ['ctrl','shift','d'] },
+    ...[1,2,3,4,5,6,7,8,9].map(n => ({ label: 'App ' + n, sub: 'taskbar pin ' + n, glyph: String(n), type: 'hotkey', keys: ['win', String(n)] })),
+    { label: 'Open…', sub: 'a program', glyph: '▶', type: 'launch', path: '', args: '' },
+    { label: 'PowerShell', sub: 'one-liner', glyph: '>', type: 'powershell', command: '' },
+  ];
+
+  const EMPTY = () => ({ id: '', label: '', sub: '', glyph: '', type: 'empty' });
+  let buttons = [], saved = '', selected = 0, standalone = false;
+
+  // ---------- state helpers -------------------------------------------------
+  const norm = (list) => { const b = (list || []).slice(0, SLOTS).map(x => ({ ...x })); while (b.length < SLOTS) b.push(EMPTY()); return b; };
+  const isDirty = () => JSON.stringify(buttons) !== saved;
+  function markDirty() { $('save').disabled = standalone || !isDirty(); $('status').innerHTML = statusText(); }
+  function statusText() {
+    const s = standalone ? 'preview only · not connected to the agent' : 'connected to the agent';
+    return s + (isDirty() ? ' · <span class="dirty">unsaved changes</span>' : '');
+  }
+  function slotId(i) { return 'slot-' + (i + 1); }
+
+  // ---------- grid ----------------------------------------------------------
+  function renderGrid() {
+    const g = $('pgrid'); g.innerHTML = '';
+    buttons.forEach((b, i) => {
+      const t = document.createElement('button');
+      t.type = 'button'; t.className = 'tile' + (b.type === 'empty' ? ' empty' : '') + (i === selected ? ' sel' : '');
+      t.draggable = true; t.dataset.i = i;
+      t.innerHTML = `<span class="n">${i + 1}</span><span class="g">${b.type === 'empty' ? '·' : (b.glyph || '')}</span><span class="l">${b.type === 'empty' ? 'empty' : (b.label || '—')}</span><span class="sb">${b.type === 'empty' ? '' : (b.sub || '')}</span>`;
+      t.addEventListener('click', () => { select(i); });
+      t.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', i); t.classList.add('dragging'); });
+      t.addEventListener('dragend', () => t.classList.remove('dragging'));
+      t.addEventListener('dragover', (e) => { e.preventDefault(); t.classList.add('over'); });
+      t.addEventListener('dragleave', () => t.classList.remove('over'));
+      t.addEventListener('drop', (e) => { e.preventDefault(); t.classList.remove('over'); const from = +e.dataTransfer.getData('text/plain'); swap(from, i); select(i); });
+      g.appendChild(t);
+    });
+  }
+  function swap(a, b) { if (a === b) return; [buttons[a], buttons[b]] = [buttons[b], buttons[a]]; renderGrid(); markDirty(); }
+
+  // ---------- editor --------------------------------------------------------
+  const panes = { hotkey: 'pHotkey', launch: 'pLaunch', volume: 'pVolume', mic: 'pMic', powershell: 'pPs', empty: null };
+  function select(i) { selected = i; renderGrid(); loadEditor(); }
+  function loadEditor() {
+    const b = buttons[selected];
+    $('edSlot').textContent = 'Slot ' + (selected + 1);
+    $('fLabel').value = b.label || ''; $('fSub').value = b.sub || ''; $('fGlyph').value = b.glyph || '';
+    $('fType').value = b.type || 'empty';
+    const keys = b.keys || [];
+    document.querySelectorAll('[data-mod]').forEach(c => c.checked = keys.includes(c.dataset.mod));
+    $('fKey').value = keys.filter(k => !['win','ctrl','alt','shift'].includes(k)).pop() || '';
+    $('fPath').value = b.path || ''; $('fArgs').value = b.args || ''; $('fDir').value = b.dir || 'up'; $('fCmd').value = b.command || '';
+    showPane(); renderCombo(); $('msg').textContent = '';
+  }
+  function showPane() {
+    const t = $('fType').value;
+    Object.entries(panes).forEach(([k, id]) => { if (id) $(id).classList.toggle('hidden', k !== t); });
+  }
+  function currentKeys() {
+    const mods = [...document.querySelectorAll('[data-mod]')].filter(c => c.checked).map(c => c.dataset.mod);
+    let k = $('fKey').value.trim().toLowerCase(); k = KEY_ALIASES[k] || k;
+    return k ? [...mods, k] : mods;
+  }
+  function renderCombo() { $('combo').innerHTML = currentKeys().map(k => `<span>${NICE[k] || k.toUpperCase()}</span>`).join('') || '<span style="color:var(--dim)">nothing yet</span>'; }
+  function readEditor() {
+    const t = $('fType').value;
+    const b = { id: buttons[selected].id || slotId(selected), label: $('fLabel').value.trim(), sub: $('fSub').value.trim(), glyph: $('fGlyph').value.trim(), type: t };
+    if (t === 'hotkey') b.keys = currentKeys();
+    if (t === 'launch') { b.path = $('fPath').value.trim(); b.args = $('fArgs').value.trim(); }
+    if (t === 'volume') b.dir = $('fDir').value;
+    if (t === 'powershell') b.command = $('fCmd').value;
+    if (t === 'empty') return EMPTY();
+    return b;
+  }
+  function validate(b) {
+    if (b.type === 'empty') return null;
+    if (!b.label) return 'Give it a label.';
+    if (b.type === 'hotkey') { if (!b.keys.length) return 'Pick a key.'; const bad = b.keys.find(k => !KEYS.includes(k) && !['win','ctrl','alt','shift'].includes(k)); if (bad) return `Unknown key "${bad}".`; }
+    if (b.type === 'launch' && !b.path) return 'Enter a path.';
+    if (b.type === 'powershell' && !b.command.trim()) return 'Enter a command.';
+    return null;
+  }
+  function commitEditor() {
+    const b = readEditor(); const err = validate(b);
+    $('msg').textContent = err || ''; $('msg').className = 'msg' + (err ? ' err' : '');
+    buttons[selected] = b; renderGrid(); markDirty();
+    return !err;
+  }
+  ['fLabel','fSub','fGlyph','fPath','fArgs','fCmd'].forEach(id => $(id).addEventListener('input', commitEditor));
+  ['fType','fDir'].forEach(id => $(id).addEventListener('change', () => { showPane(); commitEditor(); }));
+  document.querySelectorAll('[data-mod]').forEach(c => c.addEventListener('change', () => { renderCombo(); commitEditor(); }));
+  $('fKey').addEventListener('input', () => { renderCombo(); commitEditor(); });
+  $('fKey').addEventListener('keydown', (e) => {
+    if (e.key === 'Tab' && !e.ctrlKey && !e.altKey) return; // keep keyboard navigation usable
+    e.preventDefault();
+    let k = e.key.toLowerCase(); k = KEY_ALIASES[k] || k;
+    if (['control','shift','alt','meta','ctrl','win'].includes(k)) return;
+    if (e.code && /^F\d{1,2}$/.test(e.code)) k = e.code.toLowerCase();
+    if (e.code && /^Digit\d$/.test(e.code)) k = e.code.slice(5);
+    $('fKey').value = k;
+    document.querySelector('[data-mod="ctrl"]').checked = e.ctrlKey; document.querySelector('[data-mod="alt"]').checked = e.altKey; document.querySelector('[data-mod="shift"]').checked = e.shiftKey;
+    if (e.metaKey) document.querySelector('[data-mod="win"]').checked = true;
+    renderCombo(); commitEditor();
+  });
+  $('moveL').addEventListener('click', () => { if (selected > 0) { swap(selected, selected - 1); select(selected - 1); } });
+  $('moveR').addEventListener('click', () => { if (selected < SLOTS - 1) { swap(selected, selected + 1); select(selected + 1); } });
+  $('clear').addEventListener('click', () => { buttons[selected] = EMPTY(); loadEditor(); renderGrid(); markDirty(); });
+
+  // ---------- test / save / revert -------------------------------------------
+  async function api(path, body) {
+    const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    return r.json();
+  }
+  $('test').addEventListener('click', async () => {
+    const b = readEditor(); const err = validate(b);
+    if (err) { say(err, true); return; }
+    if (standalone) { say('Preview only. On the PC this would run: ' + describe(b)); return; }
+    try { const j = await api('/api/action', b); say(j.message || (j.ok ? 'done' : 'failed'), !j.ok); } catch (e) { say('agent not reachable', true); }
+  });
+  $('save').addEventListener('click', async () => {
+    if (!commitEditor()) return;
+    const problems = buttons.map((b, i) => [i, validate(b)]).filter(([, e]) => e);
+    if (problems.length) { select(problems[0][0]); say(`Slot ${problems[0][0] + 1}: ${problems[0][1]}`, true); return; }
+    try {
+      const j = await api('/api/admin/config', { buttons: buttons.filter(b => b.type !== 'empty' || true) });
+      if (j.ok) { saved = JSON.stringify(buttons); markDirty(); say('Saved. The panel picks it up within a few seconds.'); }
+      else say(j.message || 'save failed', true);
+    } catch (e) { say('agent not reachable', true); }
+  });
+  $('revert').addEventListener('click', () => { buttons = norm(JSON.parse(saved)); select(Math.min(selected, SLOTS - 1)); markDirty(); });
+  function describe(b) { return b.type === 'hotkey' ? b.keys.map(k => NICE[k] || k).join('+') : b.type === 'launch' ? 'open ' + b.path : b.type === 'volume' ? 'volume ' + b.dir : b.type === 'mic' ? 'toggle mic' : 'powershell'; }
+
+  // ---------- library ---------------------------------------------------------
+  function renderLib(q) {
+    const box = $('lib'); box.innerHTML = '';
+    LIBRARY.filter(it => !q || (it.label + ' ' + it.sub + ' ' + (it.keys || []).join(' ')).toLowerCase().includes(q)).forEach(it => {
+      const el = document.createElement('div'); el.className = 'item';
+      el.innerHTML = `<span class="g">${it.glyph}</span><span><div class="t">${it.label} <span style="color:var(--muted);font-weight:400">${it.sub}</span></div><div class="k">${describe(it)}</div></span>`;
+      const b = document.createElement('button'); b.className = 'btn small'; b.type = 'button'; b.textContent = 'Put in slot ' + (selected + 1);
+      b.addEventListener('click', () => { buttons[selected] = { ...it, id: slotId(selected) }; loadEditor(); renderGrid(); markDirty(); say(`${it.label} → slot ${selected + 1}`); });
+      el.appendChild(b); box.appendChild(el);
+    });
+  }
+  $('search').addEventListener('input', () => renderLib($('search').value.trim().toLowerCase()));
+  const _select = select; select = (i) => { _select(i); renderLib($('search').value.trim().toLowerCase()); };
+
+  // ---------- toast / boot ----------------------------------------------------
+  const toast = $('toast'); let tt;
+  function say(m, err) { toast.textContent = m; toast.className = 'toast show' + (err ? ' err' : ''); clearTimeout(tt); tt = setTimeout(() => toast.className = 'toast', 2200); }
+  window.addEventListener('beforeunload', (e) => { if (isDirty() && !standalone) { e.preventDefault(); e.returnValue = ''; } });
+
+  async function boot() {
+    try {
+      const cfg = await (await fetch('/api/config', { cache: 'no-store' })).json();
+      buttons = norm(cfg.buttons);
+    } catch (e) {
+      standalone = true; buttons = norm(LIBRARY.slice(0, 2).concat(LIBRARY[4], LIBRARY[2], LIBRARY[8], LIBRARY[6], LIBRARY[32], LIBRARY[33], LIBRARY[34], LIBRARY[29], LIBRARY[27], LIBRARY[26]));
+      $('openDash').classList.add('hidden');
+      const n = document.createElement('div'); n.className = 'note'; n.textContent = 'Preview mode: the agent is not running here, so Save is disabled and Test only describes the action. On the gaming PC this page is http://localhost:4400/admin.';
+      document.querySelector('.wrap').prepend(n); n.style.gridColumn = '1 / -1';
+    }
+    saved = JSON.stringify(buttons);
+    select(0); markDirty();
+  }
+  boot();
+})();
+</script>
+</body>
+</html>

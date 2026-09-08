@@ -1,0 +1,5 @@
+phase,item,spec,qty,unit_price_usd,price_status,vendor,url,notes
+now,Magedok T101F,"10.1in 1540x720 touch, USB-C + HDMI, stand, cables and adapter included",1,99.00,verified list; Amazon/Newegg price 99-129; Magedok sold out,amazon.com / newegg.com,https://www.amazon.com/dp/B0FGCVT6P2,"Newegg 3C6-020A-014Z2"
+later (optional),Adafruit MacroPad RP2040 bare #5100 + enclosure #5103 + switches #5876 + keycaps #5068,"12 keys + knob, plain USB keyboard",1,54.80,verified,adafruit.com,https://www.adafruit.com/product/5100,
+later (optional),Dock / case-mount / LED parts,"See docs/plan-detailed-rev2.md",0,0.00,,,,
+now,macmon (Homebrew) + the Mac agent,"Sensors, dashboard, buttons, kiosk",1,0.00,free,brew.sh / this repo,https://github.com/vladkens/macmon,"installed by software/mac/install.sh"
