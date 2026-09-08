@@ -47,7 +47,7 @@ cask "pc-stats-panel" do
     strategy :github_latest
   end
 
-  depends_on macos: ">= :ventura"
+  depends_on macos: :ventura
 
   app "PC Stats Panel.app"
 
