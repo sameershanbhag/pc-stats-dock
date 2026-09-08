@@ -40,6 +40,15 @@ buttons). Single-finger taps and drags work; multi-touch gestures do not. A tap 
   your finger the active one (a Mac app ignores the first click on an inactive window), and when the
   finger lifts the pointer returns to where it was on your big screen.
 
+## Installing
+
+```
+brew install --cask sameershanbhag/tap/pc-stats-panel
+```
+
+or download the .dmg from the releases page. Either way: open the app once, plug in the panel, switch on
+*PC Stats Panel* under System Settings › Privacy & Security › Accessibility.
+
 ## Installing without a Terminal
 
 `software/mac/package.sh` produces a `.dmg` with a self-contained *PC Stats Panel* app: drag it to Applications,

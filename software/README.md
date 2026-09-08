@@ -130,6 +130,17 @@ at the display under the pointer, not at the panel the tap just activated. Right
 focus goes back to the app you were using; for Spotlight that happens first, since Spotlight closes when
 focus moves. The dashboard window comes back on its own whenever it is missing while the panel is plugged in.
 
+## Install with Homebrew
+
+```
+brew install --cask sameershanbhag/tap/pc-stats-panel
+```
+
+Then open *PC Stats Panel* once (it sets itself up as a login item and quits), plug in the panel, and switch on
+*PC Stats Panel* under System Settings › Privacy & Security › Accessibility. `brew uninstall --cask pc-stats-panel`
+removes the login item and the app; `--zap` also removes your buttons and logs. Publishing a new version to the tap:
+`zsh mac/tap.sh` after `mac/release.sh` and `gh release create`.
+
 ## Install from the app (no Terminal)
 
 `zsh mac/package.sh` builds a self-contained `PC Stats Panel.app` and `dist/PC-Stats-Panel-<version>.dmg`.
