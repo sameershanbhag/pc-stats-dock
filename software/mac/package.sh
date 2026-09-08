@@ -5,6 +5,7 @@
 #   zsh mac/package.sh --identity "Developer ID Application: Your Name (TEAMID)"
 #   zsh mac/package.sh --identity "..." --notarize pcstats      also notarize + staple the app and the .dmg
 #   zsh mac/package.sh --version 2.5
+#   zsh mac/package.sh --app "build/export/PC Stats Panel.app"   wrap an app built and signed elsewhere (mac/release.sh)
 #
 # --notarize takes a notarytool keychain profile, created once with
 #   xcrun notarytool store-credentials pcstats --apple-id you@example.com --team-id TEAMID --password <app-specific password>
@@ -15,12 +16,14 @@ BUILD="$SRC/build"
 DIST="$SRC/dist"
 IDENTITY="-"
 PROFILE=""
+GIVEN_APP=""
 VERSION="$(grep -o 'CFBundleVersion</key><string>[^<]*' "$SRC/mac/install.sh" | head -1 | sed 's/.*<string>//')"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --identity) IDENTITY="$2"; shift 2 ;;
     --notarize) PROFILE="$2"; shift 2 ;;
     --version) VERSION="$2"; shift 2 ;;
+    --app) GIVEN_APP="$2"; shift 2 ;;
     *) echo "unknown option $1"; exit 2 ;;
   esac
 done
@@ -28,6 +31,14 @@ done
 APP="$BUILD/PC Stats Panel.app"
 DMG="$DIST/PC-Stats-Panel-$VERSION.dmg"
 
+if [[ -n "$GIVEN_APP" ]]; then
+  # An app that is already built and signed (mac/release.sh): only the disk image, signed like the app.
+  APP="$GIVEN_APP"
+  IDENTITY="$(codesign -dv --verbose=2 "$APP" 2>&1 | sed -n 's/^Authority=\(Developer ID Application: .*\)$/\1/p' | head -1)"
+  [[ -n "$IDENTITY" ]] || IDENTITY="-"
+  mkdir -p "$BUILD" "$DIST"
+  echo "== 1-4/5 using $APP  (signed by: $IDENTITY)"
+else
 echo "== 1/5 bundle  (version $VERSION)"
 rm -rf "$APP" "$BUILD/stage"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/app" "$APP/Contents/Resources/mac" "$DIST"
@@ -86,6 +97,7 @@ if [[ -n "$PROFILE" ]]; then
 else
   echo "== 4/5 notarize: skipped (no --notarize PROFILE)"
 fi
+fi   # end of the build-it-here path
 
 echo "== 5/5 disk image"
 STAGE="$BUILD/stage"; mkdir -p "$STAGE"
