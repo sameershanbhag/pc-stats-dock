@@ -121,7 +121,7 @@ EOF
 rm -f "$DMG"
 hdiutil create -volname "PC Stats Panel" -srcfolder "$STAGE" -ov -format UDZO -quiet "$DMG"
 if [[ "$IDENTITY" != "-" ]]; then
-  codesign --force --sign "$IDENTITY" --timestamp "$DMG"
+  codesign --force --sign "$IDENTITY" --timestamp "$DMG" 2>/dev/null || echo "   (dmg left unsigned: that identity is not in the local keychain; the app inside is what Gatekeeper checks)"
   if [[ -n "$PROFILE" ]]; then
     xcrun notarytool submit "$DMG" --keychain-profile "$PROFILE" --wait
     xcrun stapler staple "$DMG"
