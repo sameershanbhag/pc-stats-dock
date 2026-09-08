@@ -59,6 +59,13 @@ static const char *find_python(void) {
 
 static void resolve_paths(const char *self) {
 #ifdef BUNDLED
+    /* Python must not write its bytecode cache into the signed bundle (that breaks the seal): keep it in Caches. */
+    const char *home = getenv("HOME");
+    if (home && !getenv("PYTHONPYCACHEPREFIX")) {
+        char cache[4096];
+        snprintf(cache, sizeof cache, "%s/Library/Caches/pc-stats-dock/pycache", home);
+        setenv("PYTHONPYCACHEPREFIX", cache, 1);
+    }
     char contents[4096];
     strlcpy(contents, self, sizeof contents);
     parent_dir(contents);                    /* .../Contents/MacOS */

@@ -42,8 +42,8 @@ if [[ "$MODE" == "upload" ]]; then
     -exportPath "$BUILD/upload" -allowProvisioningUpdates -quiet
   echo "   uploaded; waiting for the ticket"
   for i in {1..40}; do
-    if xcrun stapler staple "$APP" >/dev/null 2>&1; then echo "   stapled"; break; fi
-    sleep 30
+    if xcrun stapler staple "$APP" >/dev/null 2>&1; then echo "   stapled after ~$((i / 2)) min"; break; fi
+    /usr/bin/python3 -c "import time; time.sleep(30)"
     [[ $i -eq 40 ]] && { echo "   no ticket after 20 min; run: xcrun stapler staple \"$APP\" later"; }
   done
 elif [[ "$MODE" == "profile" ]]; then

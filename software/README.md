@@ -142,20 +142,25 @@ the Dock and shows what is left to do (the Accessibility switch). Homebrew's `ma
 "/Applications/PC Stats Panel.app/Contents/MacOS/PCStatsPanel" --uninstall
 ```
 
-For a build that other Macs open without warnings, sign and notarize it with an Apple Developer account:
+For a build that other Macs open without warnings (Developer ID + notarization), use the Xcode route. It needs
+Xcode with your Apple Developer account signed in (Xcode › Settings › Accounts) and nothing else: Xcode creates
+the Developer ID certificate itself, and notarizes through the same account.
 
 ```
-# once: a "Developer ID Application" certificate (Xcode › Settings › Accounts › Manage Certificates › +)
-# once: notarytool credentials, using an app-specific password from appleid.apple.com
-xcrun notarytool store-credentials pcstats --apple-id you@example.com --team-id TEAMID --password ....
-zsh mac/package.sh --identity "Developer ID Application: Your Name (TEAMID)" --notarize pcstats
+zsh mac/release.sh --upload            # archive, export for Developer ID, notarize, staple, dist/*.dmg
+zsh mac/release.sh --notarize pcstats  # same, but notarizing with a notarytool keychain profile
 ```
+
+`mac/xcode/` is the Xcode project behind it (the launcher target plus a build phase that puts the agent, the
+dashboard and the icon into the bundle); `mac/package.sh --app <app>` wraps an exported app into the .dmg.
 
 Icons: drop your own 1024×1024 PNGs (transparent outside the rounded square) at `mac/AppIcon.png` (the app)
-and `mac/AdminIcon.png` (the Dock shortcut); without them a simple gauge icon is drawn.
+and `mac/AdminIcon.png` (the Dock shortcut); `swift mac/icon-from-image.swift picture.jpg mac/AppIcon.png`
+cuts one out of a generated picture. Without them a simple gauge icon is drawn.
 
-The same identity keeps the Accessibility permission across rebuilds of the developer install too:
-`PCSTATS_IDENTITY="Developer ID Application: ..." zsh mac/install.sh`.
+If you have a local "Developer ID Application" identity instead, `package.sh --identity "..." --notarize pcstats`
+signs without Xcode, and `PCSTATS_IDENTITY="..." zsh mac/install.sh` keeps the Accessibility permission across
+rebuilds of the developer install.
 
 ## Try it without the panel
 
