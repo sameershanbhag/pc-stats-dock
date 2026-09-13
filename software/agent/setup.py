@@ -85,6 +85,9 @@ def install(app, dry_run=False, quiet=False):
         print(f"no launcher at {exe}")
         return 2
     print(f"== PC Stats Panel: setting up the login item for {app}")
+    # A copy that came from a download carries macOS's quarantine flag; launched by launchd instead of by you,
+    # such an app hangs on the Gatekeeper prompt nobody can see. You opened it (or installed it) already, so clear it.
+    run(["/usr/bin/xattr", "-dr", "com.apple.quarantine", str(app)], dry_run)
     if not dry_run:
         LOGS.mkdir(parents=True, exist_ok=True)
         SUPPORT.mkdir(parents=True, exist_ok=True)
