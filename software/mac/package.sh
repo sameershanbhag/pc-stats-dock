@@ -100,7 +100,7 @@ fi
 fi   # end of the build-it-here path
 
 echo "== 5/5 disk image"
-STAGE="$BUILD/stage"; mkdir -p "$STAGE"
+STAGE="$BUILD/stage"; rm -rf "$STAGE"; mkdir -p "$STAGE"     # a stale stage (earlier run) would make the Applications symlink fail
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 cat > "$STAGE/Read me first.txt" <<'EOF'
