@@ -32,7 +32,7 @@ const STATS = { pc_name: 'Test Mac', demo: false, sensors: 'macmon', lhm_ok: tru
   ram: { used_gb: 16.4, total_gb: 64, load: 25.6, swap_used_gb: 0.5 }, sys_power: 19.4,
   storage: [{ name: 'Macintosh HD', temp: null, used_pct: 69.7, used_gb: 344, total_gb: 494 }],
   net: { name: 'en1', down_mbps: 12.3, up_mbps: 1.1 }, fans: [{ name: 'fan0', rpm: 1000 }] };
-const CONFIG = { pc_name: 'Test Mac', platform: 'mac', cfg_version: 1, face: { enabled: true, idle_min: 5, on_lock: false, follow_mouse: true, color: '#e08c4c' }, buttons: [
+const CONFIG = { pc_name: 'Test Mac', platform: 'mac', cfg_version: 1, face: { enabled: true, idle_min: 5, on_lock: false, follow_mouse: true, color: '#e08c4c', style: 'glass' }, buttons: [
   { id: 'space-prev', label: 'Space', sub: 'previous', glyph: '◀', type: 'hotkey', keys: ['ctrl', 'left'] },
   { id: 'mic', label: 'Mic', sub: 'mute', glyph: '●', type: 'mic' }, { type: 'empty' },
   { id: 'app1', label: 'Safari', sub: 'open', glyph: '◎', type: 'app', app: 'Safari' } ] };
@@ -232,10 +232,10 @@ async function testAdmin() {
   const dom = boot(admin, { fetchImpl }); const w = dom.window, d = w.document;
   await sleep(150);
   // idle face card: loads the settings, saves on change, previews on the panel
-  check(d.getElementById('faceIdle').value === '5' && d.getElementById('faceColor').value === '#e08c4c' && !d.getElementById('faceLock').checked, 'face card loads the settings');
+  check(d.getElementById('faceIdle').value === '5' && d.getElementById('faceColor').value === '#e08c4c' && !d.getElementById('faceLock').checked && d.getElementById('faceStyle').value === 'glass', 'face card loads the settings');
   d.getElementById('faceOn').checked = false; d.getElementById('faceOn').dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(30);
   const fs = saves.find(x => x.face);
-  check(fs && fs.face.enabled === false && fs.face.idle_min === 5 && fs.face.color === '#e08c4c' && fs.face.on_video === true && fs.face.video_min === 1, `face settings saved (${JSON.stringify(fs)})`);
+  check(fs && fs.face.enabled === false && fs.face.idle_min === 5 && fs.face.color === '#e08c4c' && fs.face.on_video === true && fs.face.video_min === 1 && fs.face.style === 'glass', `face settings saved (${JSON.stringify(fs)})`);
   d.getElementById('menuBar').checked = false; d.getElementById('menuBar').dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(30);
   check(saves.some(x => x.menu && x.menu.enabled === false) && d.getElementById('menuMsg').textContent.includes('off'), 'menu bar switch saved');
   d.getElementById('facePreview').click(); await sleep(30);

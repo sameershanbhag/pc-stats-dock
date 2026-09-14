@@ -115,8 +115,9 @@
     </section>
     <section class="card" id="faceCard">
       <div><p class="eyebrow">When you step away</p><h2>Idle face</h2></div>
-      <p class="hint">Leave the Mac alone for a few minutes, or lock the screen, and the panel shows a pair of eyes instead of the numbers: they wander, blink, watch where your mouse is on the big screen, get sleepy late at night and react when you touch the panel. While a video is playing (the player keeps the display awake) it comes sooner. Any touch or activity brings the dashboard back. (A sleeping Mac sends no picture at all, so the face shows while the Mac is awake but idle.)</p>
+      <p class="hint">Leave the Mac alone for a few minutes, or lock the screen, and the panel shows a pair of eyes instead of the numbers, in the look you pick here: they wander, blink, watch where your mouse is on the big screen, get sleepy late at night and react when you touch the panel. While a video is playing (the player keeps the display awake) it comes sooner. Any touch or activity brings the dashboard back. (A sleeping Mac sends no picture at all, so the face shows while the Mac is awake but idle.)</p>
       <div class="row">
+        <div class="field"><label for="faceStyle">Look</label><select id="faceStyle"><option value="cute" selected>Cute · glowing robot eyes</option><option value="glass">Glass · realistic glass eyes</option><option value="classic">Classic · flat shapes</option></select></div>
         <div class="field"><label for="faceIdle">Show after</label><select id="faceIdle"><option value="1">1 minute</option><option value="2">2 minutes</option><option value="3" selected>3 minutes</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="20">20 minutes</option><option value="45">45 minutes</option></select></div>
         <div class="field"><label for="faceColor">Eye colour</label><input type="color" id="faceColor" value="#6FBFC6"></div>
       </div>
@@ -373,17 +374,18 @@
     $('faceOn').checked = f.enabled !== false; $('faceLock').checked = f.on_lock !== false; $('faceFollow').checked = f.follow_mouse !== false;
     $('faceIdle').value = String(f.idle_min || 3); if (!$('faceIdle').value) $('faceIdle').value = '3';
     $('faceVideo').checked = f.on_video !== false; $('faceVideoMin').value = String(f.video_min || 1); if (!$('faceVideoMin').value) $('faceVideoMin').value = '1';
+    $('faceStyle').value = f.style || 'cute'; if (!$('faceStyle').value) $('faceStyle').value = 'cute';
     if (/^#[0-9a-fA-F]{6}$/.test(f.color || '')) $('faceColor').value = f.color;
   }
   async function faceSave() {
     const out = $('faceMsg'); if (standalone) { say('Preview only.'); return; }
     out.textContent = 'saving…'; out.className = 'msg';
     try {
-      const j = await api('/api/admin/face', { enabled: $('faceOn').checked, idle_min: Number($('faceIdle').value), on_lock: $('faceLock').checked, follow_mouse: $('faceFollow').checked, color: $('faceColor').value, on_video: $('faceVideo').checked, video_min: Number($('faceVideoMin').value) });
+      const j = await api('/api/admin/face', { enabled: $('faceOn').checked, idle_min: Number($('faceIdle').value), on_lock: $('faceLock').checked, follow_mouse: $('faceFollow').checked, color: $('faceColor').value, on_video: $('faceVideo').checked, video_min: Number($('faceVideoMin').value), style: $('faceStyle').value });
       out.textContent = j.ok ? 'saved' : (j.message || 'not saved'); out.className = 'msg ' + (j.ok ? 'ok' : 'err');
     } catch (e) { out.textContent = 'agent not reachable'; out.className = 'msg err'; }
   }
-  ['faceOn', 'faceLock', 'faceFollow', 'faceIdle', 'faceColor', 'faceVideo', 'faceVideoMin'].forEach(id => $(id).addEventListener('change', faceSave));
+  ['faceOn', 'faceLock', 'faceFollow', 'faceIdle', 'faceColor', 'faceVideo', 'faceVideoMin', 'faceStyle'].forEach(id => $(id).addEventListener('change', faceSave));
   $('facePreview').addEventListener('click', async () => {
     const out = $('faceMsg'); if (standalone) { say('Preview only.'); return; }
     try { const j = await api('/api/admin/face/preview', {}); out.textContent = j.message; out.className = 'msg ok'; }

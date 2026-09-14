@@ -63,7 +63,9 @@ def log(msg):
 
 
 FACE_DEFAULTS = {"enabled": True, "idle_min": 3, "on_lock": True, "follow_mouse": True, "color": "#6FBFC6",
-                 "on_video": True, "video_min": 1}      # a playing video keeps the display awake: the face comes sooner
+                 "on_video": True, "video_min": 1,      # a playing video keeps the display awake: the face comes sooner
+                 "style": "cute"}                       # cute (glowing robot eyes) · glass (realistic) · classic (flat shapes)
+FACE_STYLES = ("cute", "glass", "classic")
 
 
 def face_settings(body, current):
@@ -89,6 +91,8 @@ def face_settings(body, current):
             pass
     if isinstance(body.get("color"), str) and re.fullmatch(r"#[0-9a-fA-F]{6}", body["color"]):
         out["color"] = body["color"]
+    if body.get("style") in FACE_STYLES:
+        out["style"] = body["style"]
     return out
 
 

@@ -218,6 +218,8 @@
   const $ = (id) => document.getElementById(id);
   const stage = $('stage');
   window.__forceFace = new URLSearchParams(location.search).has('face');   // ?face previews the idle face
+  window.__faceHappy = new URLSearchParams(location.search).has('happy');
+  window.__faceStyle = new URLSearchParams(location.search).get('style');   // ?face&style=glass previews a look
   function fit() {
     const s = Math.min(window.innerWidth / 1540, window.innerHeight / 720);
     stage.style.transform = `scale(${s})`;
@@ -473,27 +475,56 @@
   // micro-movements, asymmetric blinks, breathing, lids and pupils that follow the mood. SVG eyes are the fallback.
   const FACE_FRAG = `#version 300 es
 precision highp float;
-uniform vec2 uRes; uniform float uTime; uniform vec4 uGaze; uniform vec2 uBlink; uniform vec2 uLid;
-uniform float uPupil; uniform float uHappy; uniform vec3 uColor; uniform float uGlow; uniform float uAsleep; uniform float uBob;
+uniform vec2 uRes; uniform float uTime; uniform vec4 uGaze; uniform vec2 uOpen; uniform vec2 uLid; uniform float uPupil;
+uniform float uHappy; uniform vec2 uSquash; uniform vec2 uScale; uniform vec3 uColor; uniform float uGlow; uniform float uAsleep;
+uniform float uBob; uniform float uStyle;
 out vec4 O;
 float hash(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
 float noise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f);
   return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y); }
 float fbm(vec2 p){ float a = 0., w = .5; for (int i = 0; i < 4; i++) { a += w*noise(p); p = p*2.1 + 7.3; w *= .5; } return a; }
-vec3 eye(vec2 p, vec2 gaze, float blink, out float mask, out float halo) {
+float sdBox(vec2 p, vec2 b, float r){ vec2 q = abs(p) - b + r; return length(max(q, 0.)) + min(max(q.x, q.y), 0.) - r; }
+float smax(float a, float b, float k){ float h = clamp(.5 + .5*(b - a)/k, 0., 1.); return mix(a, b, h) + k*h*(1. - h); }
+
+// ---- Cute: a soft glowing rounded eye, about 2 wide and 2.4 tall when open ------------------------------------
+vec3 eyeCute(vec2 p, float open, float scale, out float mask, out float halo) {
+  p /= scale;
+  p.x /= uSquash.x; p.y /= uSquash.y;
+  float h = 1.06 * max(open, .045);                                       // height follows the blink
+  float d = sdBox(p, vec2(1., h), min(.82, h));                          // soft, very round
+  d = smax(d, p.y - (h - 2.6 * uLid.x * h), .25);                        // sleepy: the top droops
+  float cy = mix(-4.6, -2.15, uHappy);                                   // happy: the bottom arches up
+  d = smax(d, -(length(p - vec2(0., cy)) - 2.05), .2);
+  float aa = clamp(fwidth(d) * 1.4, .003, .03);
+  mask = 1. - smoothstep(-aa, aa, d);
+  halo = exp(-max(d, 0.) * 2.2) * .28 + exp(-max(d, 0.) * .7) * .07;
+  if (mask < .001) return vec3(0.);
+  float t = clamp((p.y + h) / (2. * h), 0., 1.);
+  vec3 col = uColor * (.72 + .38 * t);                                   // lighter towards the top
+  col += uColor * .35 * exp(d * 5.);                                     // a soft rim inside the edge
+  col += .06 * (1. - t);
+  vec2 q = (p - vec2(-.42, h * .55)) * vec2(1.25, 2.1);
+  col += vec3(1.) * .55 * exp(-dot(q, q) * 6.5) * open;                 // a glossy highlight
+  vec2 q2 = (p - vec2(.5, -h * .45)) * vec2(2.4, 3.);
+  col += vec3(1.) * .12 * exp(-dot(q2, q2) * 5.) * open;
+  return col;
+}
+
+// ---- Glass: a glass sphere with a luminous fibrous iris -----------------------------------------------------------
+vec3 eyeGlass(vec2 p, vec2 gaze, float blink, out float mask, out float halo) {
   float open = (1. - blink) * (1. - .95*uAsleep);
-  open = max(open, .04 + .012*sin(uTime*1.3));                       // a closed eye is a thin glowing line, never nothing
+  open = max(open, .04 + .012*sin(uTime*1.3));
   float w = max(1. - p.x*p.x, 0.), shape = pow(w, .62);
   float yTop = open * (.96 - .62*uLid.x) * shape;
   float yBot = -open * (.84 - .62*uLid.y) * shape + uHappy * .55 * w * open;
-  float cx = max(abs(p.x) - 1., 0.);                                   // beyond the corners
-  float dIn = min(yTop - p.y, p.y - yBot);                              // positive inside the aperture
+  float cx = max(abs(p.x) - 1., 0.);
+  float dIn = min(yTop - p.y, p.y - yBot);
   float dOut = length(vec2(cx * 1.3, max(max(p.y - yTop, yBot - p.y), 0.)));
   float inside = (cx <= 0. && dIn > 0.) ? dIn : -dOut;
   float aa = clamp(fwidth(inside) * 1.3, .002, .02);
   mask = smoothstep(-aa, aa, inside);
-  halo = exp(-max(-inside, 0.) * 4.5);
-  if (mask < .001) return vec3(0.);                                     // nothing to shade (and no overflow far away)
+  halo = exp(-max(-inside, 0.) * 4.5) * .2;
+  if (mask < .001) return vec3(0.);
   float R = 1.18, r2 = dot(p, p);
   vec3 n = normalize(vec3(p, sqrt(max(R*R - r2, 0.))));
   vec3 L = normalize(vec3(-.45, .55, .72)), V = vec3(0., 0., 1.);
@@ -527,28 +558,37 @@ vec3 eye(vec2 p, vec2 gaze, float blink, out float mask, out float halo) {
   col += uColor * .35 * exp(-abs(inside) * 42.);
   return col;
 }
+
 void main() {
   vec2 uv = gl_FragCoord.xy / uRes;
   vec2 p = (uv - .5) * vec2(uRes.x / uRes.y, 1.) * 2.;
   p.y -= uBob;
-  vec3 col = vec3(.028, .038, .037) * (1. - .9 * dot(uv - .5, uv - .5));
-  float W = .52; vec2 cL = vec2(-.66, .02), cR = vec2(.66, .02);
-  float mL, hL, mR, hR;
-  vec3 eL = eye((p - cL) / W, uGaze.xy, uBlink.x, mL, hL);
-  vec3 eR = eye((p - cR) / W, uGaze.zw, uBlink.y, mR, hR);
-  col += uColor * uGlow * .2 * max(hL, hR) * (.35 + .65*(1. - uAsleep));
+  vec3 col = vec3(.03, .04, .04) * (1. - .85 * dot(uv - .5, uv - .5));
+  float mL, hL, mR, hR; vec3 eL, eR;
+  if (uStyle < .5) {
+    float W = .42; vec2 cL = vec2(-.60, .04), cR = vec2(.60, .04);
+    eL = eyeCute((p - cL) / W - uGaze.xy * vec2(.42, .34), uOpen.x, uScale.x, mL, hL);
+    eR = eyeCute((p - cR) / W - uGaze.zw * vec2(.42, .34), uOpen.y, uScale.y, mR, hR);
+    col += uColor * uGlow * max(hL, hR);
+  } else {
+    float W = .52; vec2 cL = vec2(-.66, .02), cR = vec2(.66, .02);
+    eL = eyeGlass((p - cL) / W, uGaze.xy, 1. - uOpen.x, mL, hL);
+    eR = eyeGlass((p - cR) / W, uGaze.zw, 1. - uOpen.y, mR, hR);
+    col += uColor * uGlow * max(hL, hR) * (.35 + .65*(1. - uAsleep));
+  }
   col = mix(col, eL, mL);
   col = mix(col, eR, mR);
   col += (hash(gl_FragCoord.xy + fract(uTime)) - .5) / 140.;
-  O = vec4(pow(max(col, 0.), vec3(.94)), 1.);
+  O = vec4(pow(max(col, 0.), vec3(.95)), 1.);
 }`;
   const face = (() => {
     const el = $('face'), canvas = $('faceGL');
     const eyes = Array.from(el.querySelectorAll('.eye')).map(e => ({ gaze: e.querySelector('.gaze'), blink: e.querySelector('.blink'), top: e.querySelector('.lid.top'), bot: e.querySelector('.lid.bot') }));
-    let cfg = { enabled: true, idle_min: 3, on_lock: true, follow_mouse: true, color: '#6FBFC6', on_video: true, video_min: 1 };
+    let cfg = { enabled: true, idle_min: 3, on_lock: true, follow_mouse: true, color: '#6FBFC6', on_video: true, video_min: 1, style: 'cute' };
     let shown = false, mode = '', timers = [], lastTouch = 0, mouseAt = 0, mouse = { x: 0, y: 0.25 }, hideTimer = null, raf = 0, lastTs = 0, hot = false;
     const S = { t: 0, gx: 0, gy: 0.1, vx: 0, vy: 0, tx: 0, ty: 0.1, conv: 0, blink: 0, phase: 'open', bt: 0, nextBlink: 2, dbl: false, nextMicro: 1,
-                lidTop: 0, lidBot: 0, tLidTop: 0, tLidBot: 0, pupil: 0.36, tPupil: 0.36, happy: 0, glow: 1, asleep: 0, tAsleep: 0, bob: 0 };
+                lidTop: 0, lidBot: 0, tLidTop: 0, tLidBot: 0, pupil: 0.36, tPupil: 0.36, happy: 0, glow: 1, asleep: 0, tAsleep: 0, bob: 0,
+                sqx: 1, sqy: 1, scL: 1, scR: 1, tScL: 1, tScR: 1, nextCurious: 5 };
     const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.push(t); return t; };
     const rnd = (a, b) => a + Math.random() * (b - a);
     const hex = c => { const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c || ''); return m ? [1, 2, 3].map(i => parseInt(m[i], 16) / 255) : [0.44, 0.75, 0.78]; };
@@ -564,7 +604,7 @@ void main() {
         g.useProgram(prog);
         const buf = g.createBuffer(); g.bindBuffer(g.ARRAY_BUFFER, buf); g.bufferData(g.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), g.STATIC_DRAW);
         const loc = g.getAttribLocation(prog, 'p'); g.enableVertexAttribArray(loc); g.vertexAttribPointer(loc, 2, g.FLOAT, false, 0, 0);
-        const U = {}; ['uRes', 'uTime', 'uGaze', 'uBlink', 'uLid', 'uPupil', 'uHappy', 'uColor', 'uGlow', 'uAsleep', 'uBob'].forEach(n => { U[n] = g.getUniformLocation(prog, n); });
+        const U = {}; ['uRes', 'uTime', 'uGaze', 'uOpen', 'uLid', 'uPupil', 'uHappy', 'uSquash', 'uScale', 'uColor', 'uGlow', 'uAsleep', 'uBob', 'uStyle'].forEach(n => { U[n] = g.getUniformLocation(prog, n); });
         return { g, U };
       } catch (e) { return null; }
     }
@@ -576,10 +616,12 @@ void main() {
       if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; g.viewport(0, 0, w, h); }
       const c = hex(cfg.color);
       g.uniform2f(U.uRes, w, h); g.uniform1f(U.uTime, S.t);
+      const open = cfg.style === 'glass' ? 1 - S.blink : (1 - S.blink) * (1 - 0.94 * S.asleep);
       g.uniform4f(U.uGaze, S.gx + S.conv, S.gy, S.gx - S.conv, S.gy);
-      g.uniform2f(U.uBlink, S.blink, S.blink); g.uniform2f(U.uLid, S.lidTop, S.lidBot);
-      g.uniform1f(U.uPupil, S.pupil); g.uniform1f(U.uHappy, S.happy); g.uniform3f(U.uColor, c[0], c[1], c[2]);
-      g.uniform1f(U.uGlow, S.glow); g.uniform1f(U.uAsleep, S.asleep); g.uniform1f(U.uBob, S.bob);
+      g.uniform2f(U.uOpen, open, open); g.uniform2f(U.uLid, S.lidTop, S.lidBot);
+      g.uniform1f(U.uPupil, S.pupil); g.uniform1f(U.uHappy, S.happy); g.uniform2f(U.uSquash, S.sqx, S.sqy); g.uniform2f(U.uScale, S.scL, S.scR);
+      g.uniform3f(U.uColor, c[0], c[1], c[2]); g.uniform1f(U.uGlow, S.glow); g.uniform1f(U.uAsleep, S.asleep); g.uniform1f(U.uBob, S.bob);
+      g.uniform1f(U.uStyle, cfg.style === 'glass' ? 1 : 0);
       g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
     }
     function drawSvg() {
@@ -606,7 +648,13 @@ void main() {
       const sm = (cur, tgt, tau) => cur + (tgt - cur) * (1 - Math.exp(-dt / tau));
       S.lidTop = sm(S.lidTop, S.tLidTop, 0.28); S.lidBot = sm(S.lidBot, S.tLidBot, 0.28);
       S.pupil = sm(S.pupil, S.tPupil + 0.02 * Math.sin(S.t * 0.9) + 0.01 * Math.sin(S.t * 2.7), 0.7);
-      S.happy = sm(S.happy, 0, 0.55);
+      const sp = Math.min(1, Math.hypot(S.vx, S.vy) * 0.35);                  // cute: cartoon smear in the direction of a fast move
+      S.sqx = sm(S.sqx, 1 + sp * 0.12 * (Math.abs(S.vx) > Math.abs(S.vy) ? 1 : -0.5), 0.08);
+      S.sqy = sm(S.sqy, 1 + sp * 0.12 * (Math.abs(S.vy) >= Math.abs(S.vx) ? 1 : -0.5), 0.08);
+      S.nextCurious -= dt;                                                    // cute: now and then one eye opens a little wider
+      if (S.nextCurious <= 0) { S.nextCurious = rnd(6, 16); if (mode === 'awake' || mode === 'watching') { const big = Math.random() < 0.5; S.tScL = big ? 1.1 : 0.92; S.tScR = big ? 0.92 : 1.1; later(() => { S.tScL = 1; S.tScR = 1; }, rnd(900, 1800)); } }
+      S.scL = sm(S.scL, S.tScL, 0.25); S.scR = sm(S.scR, S.tScR, 0.25);
+      S.happy = window.__faceHappy ? 1 : sm(S.happy, 0, 0.55);
       S.asleep = sm(S.asleep, S.tAsleep, 1.4);
       S.glow = 0.95 + 0.08 * Math.sin(S.t * 1.3) + (hot ? 0.3 + 0.15 * Math.sin(S.t * 6) : 0);
       S.bob = 0.012 * Math.sin(S.t * 0.8) * (1 + 1.6 * S.asleep);
@@ -616,7 +664,7 @@ void main() {
       if (!shown) { raf = 0; return; }
       const dt = lastTs ? Math.min(0.05, (ts - lastTs) / 1000) : 0.016; lastTs = ts;
       step(dt);
-      if (gl) draw(); else drawSvg();
+      if (gl && cfg.style !== 'classic') draw(); else drawSvg();
       raf = requestAnimationFrame(frame);
     }
     function look(x, y, kick) { S.tx = Math.max(-1, Math.min(1, x)); S.ty = Math.max(-1, Math.min(1, y)); if (kick) { S.vx += (S.tx - S.gx) * 6; S.vy += (S.ty - S.gy) * 6; } }
@@ -638,12 +686,13 @@ void main() {
       S.tLidBot = m === 'focused' ? 0.12 : 0;
       S.tPupil = m === 'focused' ? 0.27 : m === 'watching' ? 0.44 : m === 'sleepy' ? 0.4 : 0.36;
       S.tAsleep = m === 'asleep' ? 1 : 0;
+      if (m !== 'awake' && m !== 'watching') { S.tScL = 1; S.tScR = 1; }
       if (m === 'asleep') look(0, 0.45);
     }
     function show() {
       shown = true; mode = ''; clearTimeout(hideTimer);
-      el.classList.add('show'); requestAnimationFrame(() => el.classList.add('in'));
-      Object.assign(S, { gx: 0, gy: 0.1, vx: 0, vy: 0, tx: 0, ty: 0.1, blink: 0, phase: 'open', nextBlink: 0.9, lidTop: 0, lidBot: 0, happy: 0, asleep: 0, tAsleep: 0 });
+      el.classList.add('show'); if (window.__forceFace) el.classList.add('in'); else requestAnimationFrame(() => el.classList.add('in'));
+      Object.assign(S, { gx: 0, gy: 0.1, vx: 0, vy: 0, tx: 0, ty: 0.1, blink: 0, phase: 'open', nextBlink: 0.9, lidTop: 0, lidBot: 0, happy: 0, asleep: 0, tAsleep: 0, sqx: 1, sqy: 1, scL: 1, scR: 1, tScL: 1, tScR: 1 });
       lastTs = 0; if (!raf) raf = requestAnimationFrame(frame);
       later(wander, 1100);
     }
@@ -653,7 +702,9 @@ void main() {
     }
     function update(d, c) {
       if (c) cfg = Object.assign(cfg, c);
+      if (window.__faceStyle) cfg.style = window.__faceStyle;
       el.style.setProperty('--eye', cfg.color || '#6FBFC6');
+      el.classList.toggle('gl', !!gl && cfg.style !== 'classic');
       const idle = d.idle_s || 0, now = Date.now();
       const video = !!d.video && cfg.on_video !== false && idle >= (cfg.video_min || 1) * 60;
       const want = !!window.__forceFace || !!d.face_preview || (cfg.enabled !== false && ((d.locked && cfg.on_lock !== false) || video || idle >= (cfg.idle_min || 3) * 60));
@@ -670,9 +721,9 @@ void main() {
       const x = ((ev.clientX - r.left) / w - 0.5) * 2, y = ((ev.clientY - r.top) / hh - 0.5) * 2;
       lastTouch = Date.now(); look(x, -y, true); S.conv = 0.07; S.happy = 1; S.pupil = Math.min(0.55, S.pupil + 0.12);
       if (S.phase === 'open') { S.phase = 'closing'; S.bt = 0; }
-      if (!gl) eyes.forEach(e => { e.gaze.style.transform = `translate(${(x * 74).toFixed(1)}px, ${(y * 44).toFixed(1)}px)`; });
+      if (!gl || cfg.style === 'classic') eyes.forEach(e => { e.gaze.style.transform = `translate(${(x * 74).toFixed(1)}px, ${(y * 44).toFixed(1)}px)`; });
     });
-    return { update, get shown() { return shown; }, get mode() { return mode; }, get gpu() { return !!gl; } };
+    return { update, get shown() { return shown; }, get mode() { return mode; }, get gpu() { return !!gl; }, get style() { return cfg.style; } };
   })();
   let latestCfg = null;
 

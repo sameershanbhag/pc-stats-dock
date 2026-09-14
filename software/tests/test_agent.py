@@ -750,6 +750,8 @@ Listed by owning process:
         self.assertEqual(idle.parse_display_holders("Listed by owning process:\n   pid 1(x): [0x1] 00:00:01 PreventUserIdleSystemSleep named: \"audio\"\n"), [])
         self.assertEqual(agent.face_settings({"on_video": 0, "video_min": "0.7"}, agent.FACE_DEFAULTS)["video_min"], 0.5)
         self.assertEqual(agent.face_settings({"video_min": 99}, agent.FACE_DEFAULTS)["video_min"], 60.0)
+        self.assertEqual(agent.face_settings({"style": "glass"}, agent.FACE_DEFAULTS)["style"], "glass")
+        self.assertEqual(agent.face_settings({"style": "scary"}, agent.FACE_DEFAULTS)["style"], "cute")     # unknown look ignored
 
     def test_config_gets_face_defaults(self):
         tmp = Path(tempfile.mkdtemp()) / "config.json"
