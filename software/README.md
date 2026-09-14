@@ -125,7 +125,9 @@ longer installed; run the script yourself if you prefer a Dock icon. The ⚙ on 
 ## Idle face
 
 Leave the Mac alone for a few minutes (3 by default), or lock the screen, and the panel shows a pair of eyes
-instead of the numbers. They wander and blink, watch where your mouse is on the big screen, narrow when the CPU
+instead of the numbers. They are drawn per pixel on the GPU (a WebGL 2 fragment shader: glass spheres, a fibrous
+luminous iris that deforms when they look sideways, real highlights and a soft glow; the SVG eyes are the fallback),
+and they move on a small physics model: spring saccades with micro-movements, asymmetric blinks, breathing. They wander and blink, watch where your mouse is on the big screen, narrow when the CPU
 is busy, sweat when things run hot, get sleepy late at night and after a long idle, and fall asleep after 45
 minutes. While a video is playing (the player asks macOS to keep the display awake) the face comes after one
 minute instead, and the eyes mostly watch the big screen with you. Touch the panel and they look at your finger;

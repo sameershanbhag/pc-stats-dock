@@ -90,15 +90,15 @@ async function testDashboardLive() {
   check(/translate\(/.test(gaze), `eyes look at the touch (${gaze})`);
   idleS = 0; await sleep(700);
   check(face.classList.contains('show'), 'face stays a moment after a touch');
-  await sleep(1400);
+  await sleep(2200);
   check(!face.classList.contains('show'), 'face gone once the Mac is used again');
   locked = true; await sleep(700);
   check(face.classList.contains('show'), 'face shown while the screen is locked');
-  locked = false; await sleep(700);
+  locked = false; await sleep(1200);
   check(!face.classList.contains('show'), 'face gone after unlock');
   video = { app: 'Google Chrome', why: 'Video Wake Lock' }; idleS = 90; await sleep(700);
   check(face.classList.contains('show'), 'face shown after a minute of a video playing (before the idle delay)');
-  video = null; await sleep(700);
+  video = null; await sleep(1200);
   check(!face.classList.contains('show'), 'face gone when the video stops and the idle delay is not reached');
   dom.window.close();
 }
