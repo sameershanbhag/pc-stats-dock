@@ -79,11 +79,15 @@ echo "== 2/5 launcher (universal, bundle mode)"
 clang -O2 -Wall -arch arm64 -arch x86_64 -mmacosx-version-min=13.0 -DBUNDLED \
   -framework ApplicationServices -framework CoreFoundation -framework IOKit \
   -o "$APP/Contents/MacOS/PCStatsPanel" "$SRC/mac/launcher.c"
+clang -O2 -Wall -arch arm64 -arch x86_64 -mmacosx-version-min=13.0 -fobjc-arc -framework AppKit -framework Foundation \
+  -o "$APP/Contents/MacOS/PCStatsMenu" "$SRC/mac/menubar.m"
 
 echo "== 3/5 sign  ($IDENTITY)"
 if [[ "$IDENTITY" == "-" ]]; then
+  codesign --force --sign - --identifier com.pcstatsdock.menu --options runtime "$APP/Contents/MacOS/PCStatsMenu"
   codesign --force --sign - --identifier com.pcstatsdock.agent --options runtime "$APP"
 else
+  codesign --force --sign "$IDENTITY" --identifier com.pcstatsdock.menu --options runtime --timestamp "$APP/Contents/MacOS/PCStatsMenu"
   codesign --force --sign "$IDENTITY" --identifier com.pcstatsdock.agent --options runtime --timestamp "$APP"
 fi
 codesign --verify --strict --deep "$APP" && echo "   signature ok"

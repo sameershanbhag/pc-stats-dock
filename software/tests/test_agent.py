@@ -682,6 +682,12 @@ class TestServer(unittest.TestCase):
         self.assertEqual(json.loads((self.tmp / "config.json").read_text())["face"]["idle_min"], 180)                     # persisted
         self.req("/api/admin/face", "POST", {"idle_min": 3, "enabled": True, "on_lock": True, "color": "#6FBFC6"})
 
+    def test_menu_bar_endpoint(self):
+        code, _, body = self.req("/api/admin/menu", "POST", {"enabled": False})
+        self.assertEqual(code, 200); self.assertFalse(json.loads(body)["menu_bar"])
+        _, _, body = self.req("/api/config"); self.assertFalse(json.loads(body)["menu_bar"])
+        self.req("/api/admin/menu", "POST", {"enabled": True})
+
     def test_face_preview_and_idle_fields_in_stats(self):
         code, _, body = self.req("/api/admin/face/preview", "POST", {})
         self.assertEqual(code, 200); self.assertGreater(self.state.face_preview_until, time.time())
@@ -763,3 +769,30 @@ Listed by owning process:
              mock.patch.object(agent.idle_mod, "seconds_idle", return_value=0.5), mock.patch.object(agent.idle_mod, "screen_locked", return_value=None):
             f = agent.idle_fields(state)                                     # cached displays; cursor on the panel -> no gaze
         self.assertIsNone(f["gaze"]); self.assertIsNone(f["locked"])
+
+
+class TestMenuBar(unittest.TestCase):
+    def test_supervisor_starts_once_and_stops(self):
+        import menubar
+        exe = Path(tempfile.mkdtemp()) / "PCStatsMenu"
+        exe.write_text("#!/bin/sh\nsleep 30\n"); exe.chmod(0o755)
+        logs = []
+        m = menubar.MenuBar(4400, logs.append, exe=exe)
+        m.tick(); self.assertTrue(m.running()); pid = m.proc.pid
+        m.tick(); self.assertEqual(m.proc.pid, pid)                       # already running: nothing
+        self.assertEqual(m.proc.args, [str(exe)])
+        m.tick(enabled=False); self.assertFalse(m.running())              # switched off: stopped
+        self.assertTrue(any("started" in l for l in logs))
+
+    def test_supervisor_without_helper(self):
+        import menubar
+        logs = []
+        with mock.patch.dict(os.environ, {"PCSTATS_LAUNCHER": "/nonexistent/PCStatsPanel"}):
+            m = menubar.MenuBar(4400, logs.append)
+        m.tick(); m.tick()
+        self.assertIsNone(m.proc); self.assertEqual(sum("skipping" in l for l in logs), 1)
+
+    def test_menu_setting_endpoint_and_default(self):
+        tmp = Path(tempfile.mkdtemp()) / "config.json"
+        with mock.patch.object(agent, "CONFIG_PATH", tmp):
+            self.assertTrue(agent.load_config()["menu_bar"])

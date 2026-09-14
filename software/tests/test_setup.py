@@ -56,7 +56,12 @@ class SetupTests(unittest.TestCase):
         self.assertTrue(setup.LOGS.is_dir())
         verbs = [c[1] for c in calls if c[0] == "/bin/launchctl"]
         self.assertEqual(verbs[:2], ["bootout", "bootstrap"])                 # replace an earlier copy, then load
-        self.assertTrue(any(c[0] == "/bin/zsh" and c[1].endswith("dock-admin.sh") for c in calls))   # Dock icon
+        self.assertFalse(any(c[0] == "/bin/zsh" and c[1].endswith("dock-admin.sh") for c in calls))  # no Dock shortcut: the menu bar icon replaced it
+        (self.home / "Applications" / "Stats Dock Admin.app").mkdir(parents=True); calls.clear()
+        with mock.patch.object(setup, "run", side_effect=fake_run), \
+             mock.patch.object(setup, "health", return_value={"ok": True, "caps": {"accessibility": True}}):
+            setup.install(self.app, quiet=True)
+        self.assertTrue(any(c[0] == "/bin/zsh" and c[1].endswith("dock-admin.sh") and c[2] == "--remove" for c in calls))   # an old one is removed
 
     def test_install_dry_run_touches_nothing(self):
         with mock.patch.object(setup, "health", return_value=None):

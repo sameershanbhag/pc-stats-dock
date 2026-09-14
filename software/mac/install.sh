@@ -43,8 +43,8 @@ INFO='<?xml version="1.0" encoding="UTF-8"?>
   <key>CFBundleIdentifier</key><string>com.pcstatsdock.agent</string>
   <key>CFBundleExecutable</key><string>PCStatsPanel</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleVersion</key><string>2.6</string>
-  <key>CFBundleShortVersionString</key><string>2.6</string>
+  <key>CFBundleVersion</key><string>2.7</string>
+  <key>CFBundleShortVersionString</key><string>2.7</string>
   <key>LSUIElement</key><true/>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
 </dict></plist>'
@@ -65,6 +65,7 @@ else
        -DPYTHON="\"$PY\"" -DAGENT="\"$DIR/agent/agent.py\"" -DAGENT_DIR="\"$DIR/agent\"" \
        -o "$APP/Contents/MacOS/PCStatsPanel" "$LAUNCHER_SRC" 2>/tmp/pcstats-clang.log; then
     echo "   compiled launcher"
+    clang -O2 -Wall -fobjc-arc -framework AppKit -framework Foundation -o "$APP/Contents/MacOS/PCStatsMenu" "$SRC/mac/menubar.m" 2>>/tmp/pcstats-clang.log && echo "   compiled menu bar item" || echo "   (menu bar item not compiled; see /tmp/pcstats-clang.log)"
     mkdir -p "$(dirname "$STAMP")"; print -r -- "$WANT" > "$STAMP"
     REBUILT=1
   else

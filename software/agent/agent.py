@@ -39,6 +39,7 @@ from displays import Kiosk, list_displays  # noqa: E402
 import arrange  # noqa: E402
 import touch as touch_mod
 import idle as idle_mod
+import menubar as menubar_mod
 import feeds as feeds_mod  # noqa: E402
 from events import EventStore, from_claude_code, from_codex, from_generic  # noqa: E402
 from feeds import APP_PRESETS, SOURCES, FeedManager, TeamsFeed  # noqa: E402
@@ -130,6 +131,7 @@ def load_config():
     cfg.setdefault("right_side", "three")
     cfg.setdefault("panel_position", "above")       # where the panel sits relative to the main display
     cfg.setdefault("keep_panel_for_dock", True)     # never let the panel become the main display
+    cfg.setdefault("menu_bar", True)                # the gauge icon in the menu bar (admin page, face preview, restart)
     face = cfg.setdefault("face", {})               # the idle face: eyes on the panel when the Mac is left alone
     for k, v in FACE_DEFAULTS.items():
         face.setdefault(k, v)
@@ -219,6 +221,7 @@ class State:
         self.face_preview_until = 0.0  # admin page: show the idle face on the panel for a moment
         self.displays_cache, self.displays_at = [], 0.0
         self.video_cache, self.video_at = None, 0.0   # who keeps the display awake (a playing video)
+        self.menu = None               # the menu bar item supervisor (set in main)
         self.touch = None       # touch mapper supervisor (set when the kiosk runs)
 
     def set(self, stats):
@@ -556,7 +559,7 @@ def make_handler(state, cfg, feeds_mgr=None, events=None):
                 return self._json(200, {"pc_name": cfg["_pc_name"], "buttons": cfg["buttons"], "cfg_version": state.cfg_version, "platform": "mac",
                                         "right_side": cfg.get("right_side", "feeds"), "feeds": public_feeds(cfg), "app_presets": list(APP_PRESETS),
                                         "panel_position": cfg.get("panel_position", "above"), "keep_panel_for_dock": cfg.get("keep_panel_for_dock", True),
-                                        "face": dict(cfg.get("face", FACE_DEFAULTS))})
+                                        "face": dict(cfg.get("face", FACE_DEFAULTS)), "menu_bar": bool(cfg.get("menu_bar", True))})
             if path == "/api/feeds":
                 return self._json(200, {"right_side": cfg.get("right_side", "feeds"), "feeds": feeds_mgr.snapshot() if feeds_mgr else []})
             if path == "/api/events":
@@ -658,6 +661,15 @@ def make_handler(state, cfg, feeds_mgr=None, events=None):
                     return self._json(500, {"ok": False, "message": f"could not save: {exc}"})
                 state.cfg_version += 1
                 return self._json(200, {"ok": True, "message": "saved", "face": cfg["face"]})
+            if path == "/api/admin/menu":
+                body = self._body() or {}
+                cfg["menu_bar"] = bool(body.get("enabled", True))
+                try:
+                    save_config(cfg)
+                except OSError as exc:
+                    return self._json(500, {"ok": False, "message": f"could not save: {exc}"})
+                state.cfg_version += 1
+                return self._json(200, {"ok": True, "message": "menu bar icon " + ("on" if cfg["menu_bar"] else "off"), "menu_bar": cfg["menu_bar"]})
             if path == "/api/admin/face/preview":
                 state.face_preview_until = time.time() + 20
                 return self._json(200, {"ok": True, "message": "the face is on the panel for 20 seconds"})
@@ -815,6 +827,8 @@ def kiosk_loop(kiosk, cfg, state):
                 if front and front not in kiosk._pids():
                     state.last_front_pid = front
             kiosk.tick()
+            if state.menu and not DRY_RUN:
+                state.menu.tick(cfg.get("menu_bar", True))
         except Exception as exc:
             log(f"[kiosk] {type(exc).__name__}: {exc}")
         time.sleep(3)
@@ -850,6 +864,7 @@ def main():
         w, h = cfg["panel_resolution"]
         state.kiosk = Kiosk(f"http://127.0.0.1:{port}/", w, h, log)
         state.touch = touch_mod.TouchMapper((w, h), log)
+        state.menu = menubar_mod.MenuBar(cfg["port"], log)
         threading.Thread(target=kiosk_loop, args=(state.kiosk, cfg, state), daemon=True).start()
     events = EventStore()
     feeds_mod.EVENT_STORE = events

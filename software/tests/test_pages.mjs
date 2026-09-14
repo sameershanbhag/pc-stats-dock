@@ -226,6 +226,7 @@ async function testAdmin() {
     if (url === '/api/action') { tests.push(JSON.parse(opts.body)); return json({ ok: true, message: 'dry run' }); }
     if (url === '/api/admin/face') { const b = JSON.parse(opts.body); saves.push({ face: b }); return json({ ok: true, message: 'saved', face: b }); }
     if (url === '/api/admin/face/preview') { saves.push({ preview: true }); return json({ ok: true, message: 'the face is on the panel for 20 seconds' }); }
+    if (url === '/api/admin/menu') { const b = JSON.parse(opts.body); saves.push({ menu: b }); return json({ ok: true, message: 'menu bar icon off', menu_bar: b.enabled }); }
     return json({}, false, 404);
   };
   const dom = boot(admin, { fetchImpl }); const w = dom.window, d = w.document;
@@ -235,6 +236,8 @@ async function testAdmin() {
   d.getElementById('faceOn').checked = false; d.getElementById('faceOn').dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(30);
   const fs = saves.find(x => x.face);
   check(fs && fs.face.enabled === false && fs.face.idle_min === 5 && fs.face.color === '#e08c4c' && fs.face.on_video === true && fs.face.video_min === 1, `face settings saved (${JSON.stringify(fs)})`);
+  d.getElementById('menuBar').checked = false; d.getElementById('menuBar').dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(30);
+  check(saves.some(x => x.menu && x.menu.enabled === false) && d.getElementById('menuMsg').textContent.includes('off'), 'menu bar switch saved');
   d.getElementById('facePreview').click(); await sleep(30);
   check(saves.some(x => x.preview) && d.getElementById('faceMsg').textContent.includes('20 seconds'), 'face preview asks the agent');
   const tiles = d.querySelectorAll('#pgrid .tile');

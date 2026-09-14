@@ -110,6 +110,7 @@
         <div class="field"><label>&nbsp;</label><label class="mod" style="justify-content:flex-start"><input type="checkbox" id="keepPanel" checked> keep the panel for the dock only</label></div>
       </div>
       <div class="actions"><button class="btn" id="arrangeNow" type="button">Fix arrangement now</button><span class="msg" id="arrangeMsg"></span></div>
+      <div class="row"><div class="field"><label class="mod" style="justify-content:flex-start"><input type="checkbox" id="menuBar" checked> gauge icon in the menu bar (admin page, face preview, restart)</label></div><div class="field"><span class="msg" id="menuMsg"></span></div></div>
       <p class="hint" id="touchState">Touch: checking…</p>
     </section>
     <section class="card" id="faceCard">
@@ -388,6 +389,11 @@
     try { const j = await api('/api/admin/face/preview', {}); out.textContent = j.message; out.className = 'msg ok'; }
     catch (e) { out.textContent = 'agent not reachable'; out.className = 'msg err'; }
   });
+  $('menuBar').addEventListener('change', async () => {
+    const out = $('menuMsg'); if (standalone) { say('Preview only.'); return; }
+    try { const j = await api('/api/admin/menu', { enabled: $('menuBar').checked }); out.textContent = j.message; out.className = 'msg ok'; }
+    catch (e) { out.textContent = 'agent not reachable'; out.className = 'msg err'; }
+  });
   $('panelPos').addEventListener('change', arrangeNow);
   $('keepPanel').addEventListener('change', arrangeNow);
   const norm = (list) => { const b = (list || []).slice(0, SLOTS).map(x => ({ ...x })); while (b.length < SLOTS) b.push(EMPTY()); return b; };
@@ -518,7 +524,7 @@
   window.addEventListener('beforeunload', (e) => { if (isDirty() && !standalone) { e.preventDefault(); e.returnValue = ''; } });
 
   async function boot() {
-    try { const cfg = await (await fetch('/api/config', { cache: 'no-store' })).json(); buttons = norm(cfg.buttons); faceLoad(cfg); rightSide = cfg.right_side || 'feeds'; feeds = normFeeds(cfg.feeds); $('panelPos').value = cfg.panel_position || 'above'; $('keepPanel').checked = cfg.keep_panel_for_dock !== false; }
+    try { const cfg = await (await fetch('/api/config', { cache: 'no-store' })).json(); buttons = norm(cfg.buttons); faceLoad(cfg); $('menuBar').checked = cfg.menu_bar !== false; rightSide = cfg.right_side || 'feeds'; feeds = normFeeds(cfg.feeds); $('panelPos').value = cfg.panel_position || 'above'; $('keepPanel').checked = cfg.keep_panel_for_dock !== false; }
     catch (e) {
       standalone = true; rightSide = 'three'; feeds = normFeeds(DEFAULT_FEEDS);
       buttons = norm([LIBRARY[0], LIBRARY[1], LIBRARY[2], LIBRARY[4], LIBRARY[6], LIBRARY[11], LIBRARY[26], LIBRARY[28], LIBRARY[16], LIBRARY[23], LIBRARY[21], LIBRARY[20]]);

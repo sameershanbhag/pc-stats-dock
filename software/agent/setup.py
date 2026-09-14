@@ -104,16 +104,16 @@ def install(app, dry_run=False, quiet=False):
     h = None if dry_run else health()
     print("   agent: " + (f"running on http://localhost:{PORT}" if h else "did not answer yet (see " + str(LOGS / "agent.err.log") + ")"))
     dock = app / "Contents" / "Resources" / "mac" / "dock-admin.sh"
-    if dock.exists():
-        run(["/bin/zsh", str(dock)], dry_run, timeout=120)
-        print("   Dock: Stats Dock Admin icon " + ("would be added" if dry_run else "added"))
+    if dock.exists() and (HOME / "Applications" / "Stats Dock Admin.app").exists():
+        run(["/bin/zsh", str(dock), "--remove"], dry_run, timeout=120)       # the menu bar icon replaced the Dock shortcut
+        print("   Dock: the old Stats Dock Admin shortcut " + ("would be removed" if dry_run else "removed") + " (the gauge icon in the menu bar replaces it)")
     trusted = bool(h and h.get("caps", {}).get("accessibility"))
     lines = ["PC Stats Panel is installed and starts at login.", ""]
     lines.append("• Plug in the panel: the dashboard opens on it by itself.")
     if not trusted:
         lines.append("• Key buttons and touch need one switch: System Settings › Privacy & Security › Accessibility › PC Stats Panel.")
     lines.append("• Temperatures and power need Homebrew's macmon (brew install macmon); the automatic screen arrangement needs displayplacer.")
-    lines.append("• Buttons and feeds: the Stats Dock Admin icon in your Dock, or http://localhost:4400/admin.")
+    lines.append("• The gauge icon in the menu bar opens the admin page (buttons, feeds, the idle face) and restarts the dock.")
     message = "\n".join(lines)
     print(message)
     if not quiet and not dry_run:

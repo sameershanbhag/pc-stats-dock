@@ -114,11 +114,13 @@ it. The agent handles both, automatically, every time the panel is connected:
 
 If you would rather not have any of this, untick *keep the panel for the dock only* in the admin page.
 
-## Getting to the admin page
+## The menu bar icon
 
-- **Dock:** the installer puts *Stats Dock Admin* in your Mac's Dock; click it and the admin page opens in
-  your browser (`mac/dock-admin.sh --remove` takes it out again).
-- **Panel:** the ⚙ button at the top right of the dashboard opens the same page on your Mac.
+A small gauge in the menu bar (`mac/menubar.m`, a tiny AppKit helper inside the app that the agent starts and
+supervises) opens the admin page or the dashboard in a browser, shows the idle face on the panel for 20 seconds,
+fixes the screen arrangement and restarts the dock; its first line tells whether the panel is connected and touch
+is mapped. Switch it off in the admin page's *Display* card. The older Dock shortcut (`mac/dock-admin.sh`) is no
+longer installed; run the script yourself if you prefer a Dock icon. The ⚙ on the dashboard still opens the admin page.
 
 ## Idle face
 
