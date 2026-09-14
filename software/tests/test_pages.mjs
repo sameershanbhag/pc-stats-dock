@@ -32,7 +32,7 @@ const STATS = { pc_name: 'Test Mac', demo: false, sensors: 'macmon', lhm_ok: tru
   ram: { used_gb: 16.4, total_gb: 64, load: 25.6, swap_used_gb: 0.5 }, sys_power: 19.4,
   storage: [{ name: 'Macintosh HD', temp: null, used_pct: 69.7, used_gb: 344, total_gb: 494 }],
   net: { name: 'en1', down_mbps: 12.3, up_mbps: 1.1 }, fans: [{ name: 'fan0', rpm: 1000 }] };
-const CONFIG = { pc_name: 'Test Mac', platform: 'mac', cfg_version: 1, buttons: [
+const CONFIG = { pc_name: 'Test Mac', platform: 'mac', cfg_version: 1, face: { enabled: true, idle_min: 5, on_lock: false, follow_mouse: true, color: '#e08c4c' }, buttons: [
   { id: 'space-prev', label: 'Space', sub: 'previous', glyph: '◀', type: 'hotkey', keys: ['ctrl', 'left'] },
   { id: 'mic', label: 'Mic', sub: 'mute', glyph: '●', type: 'mic' }, { type: 'empty' },
   { id: 'app1', label: 'Safari', sub: 'open', glyph: '◎', type: 'app', app: 'Safari' } ] };
@@ -40,10 +40,10 @@ const CONFIG = { pc_name: 'Test Mac', platform: 'mac', cfg_version: 1, buttons: 
 async function testDashboardLive() {
   console.log('dashboard · live agent');
   const posted = [];
-  let statsVersion = 1; let configCalls = 0;
+  let statsVersion = 1; let configCalls = 0; let idleS = 0, locked = false;
   const fetchImpl = (url, opts = {}) => {
-    if (url.startsWith('/api/config')) { configCalls++; return json({ ...CONFIG, cfg_version: statsVersion, buttons: statsVersion === 1 ? CONFIG.buttons : CONFIG.buttons.slice(0, 2) }); }
-    if (url.startsWith('/api/stats')) return json({ ...STATS, cfg_version: statsVersion });
+    if (url.startsWith('/api/config')) { configCalls++; return json({ ...CONFIG, face: { ...CONFIG.face, on_lock: true }, cfg_version: statsVersion, buttons: statsVersion === 1 ? CONFIG.buttons : CONFIG.buttons.slice(0, 2) }); }
+    if (url.startsWith('/api/stats')) return json({ ...STATS, cfg_version: statsVersion, idle_s: idleS, locked, gaze: { x: 0.25, y: 0.5 } });
     if (url.startsWith('/api/action/')) { posted.push(url); return json({ ok: true, message: 'sent ctrl+left' }); }
     if (url.startsWith('/api/admin/open')) { posted.push(url); return json({ ok: true, message: 'opened' }); }
     return json({}, false, 404);
@@ -78,6 +78,24 @@ async function testDashboardLive() {
   check(configCalls >= 2 && d.querySelectorAll('#keys .key').length === 2, `buttons reloaded after version bump (calls=${configCalls}, keys=${d.querySelectorAll('#keys .key').length})`);
   const stage = d.getElementById('stage');
   check(/scale\(1\)/.test(stage.style.transform), `stage scaled 1:1 at 1540x720 (${stage.style.transform})`);
+  // idle face: hidden while active, shown after the idle delay, reacts to a touch, back when activity resumes, shown when locked
+  const face = d.getElementById('face');
+  check(!face.classList.contains('show'), 'face hidden while the Mac is in use');
+  idleS = 600; await sleep(700);
+  check(face.classList.contains('show'), 'face shown after the idle delay');
+  check(face.querySelectorAll('.eye').length === 2, 'two eyes');
+  face.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, clientX: 1200, clientY: 200 }));
+  await sleep(20);
+  const gaze = face.querySelector('.eye .gaze').style.transform;
+  check(/translate\(/.test(gaze), `eyes look at the touch (${gaze})`);
+  idleS = 0; await sleep(700);
+  check(face.classList.contains('show'), 'face stays a moment after a touch');
+  await sleep(1400);
+  check(!face.classList.contains('show'), 'face gone once the Mac is used again');
+  locked = true; await sleep(700);
+  check(face.classList.contains('show'), 'face shown while the screen is locked');
+  locked = false; await sleep(700);
+  check(!face.classList.contains('show'), 'face gone after unlock');
   dom.window.close();
 }
 
@@ -202,10 +220,19 @@ async function testAdmin() {
     if (url === '/api/admin/config') { const b = JSON.parse(opts.body); saves.push(b); return json({ ok: true, cfg_version: 2, buttons: b.buttons }); }
     if (url === '/api/admin/feeds') { const b = JSON.parse(opts.body); saves.push(b); return json({ ok: true, cfg_version: 3, right_side: b.right_side, feeds: b.feeds.map((f, i) => ({ ...f, id: 'feed-' + (i + 1), has_token: !!f.token, token: undefined })) }); }
     if (url === '/api/action') { tests.push(JSON.parse(opts.body)); return json({ ok: true, message: 'dry run' }); }
+    if (url === '/api/admin/face') { const b = JSON.parse(opts.body); saves.push({ face: b }); return json({ ok: true, message: 'saved', face: b }); }
+    if (url === '/api/admin/face/preview') { saves.push({ preview: true }); return json({ ok: true, message: 'the face is on the panel for 20 seconds' }); }
     return json({}, false, 404);
   };
   const dom = boot(admin, { fetchImpl }); const w = dom.window, d = w.document;
   await sleep(150);
+  // idle face card: loads the settings, saves on change, previews on the panel
+  check(d.getElementById('faceIdle').value === '5' && d.getElementById('faceColor').value === '#e08c4c' && !d.getElementById('faceLock').checked, 'face card loads the settings');
+  d.getElementById('faceOn').checked = false; d.getElementById('faceOn').dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(30);
+  const fs = saves.find(x => x.face);
+  check(fs && fs.face.enabled === false && fs.face.idle_min === 5 && fs.face.color === '#e08c4c', `face settings saved (${JSON.stringify(fs)})`);
+  d.getElementById('facePreview').click(); await sleep(30);
+  check(saves.some(x => x.preview) && d.getElementById('faceMsg').textContent.includes('20 seconds'), 'face preview asks the agent');
   const tiles = d.querySelectorAll('#pgrid .tile');
   check(tiles.length === 12, '12 slots');
   check(tiles[0].classList.contains('sel') && tiles[2].classList.contains('empty'), 'first selected, third empty');

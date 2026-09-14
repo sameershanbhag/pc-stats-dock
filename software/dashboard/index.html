@@ -121,6 +121,29 @@
   .toast { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--line); color: var(--ink); font-size: 13px; padding: 8px 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
   .toast.show { opacity: 1; }
   .toast.err { border-color: var(--bad); }
+
+  /* Idle face: shown when the Mac has been left alone or is locked. Two glowing eyes, nothing else. */
+  #face { position: absolute; inset: 0; background: var(--bg); display: none; z-index: 5; --eye: #6FBFC6; }
+  #face.show { display: block; }
+  #face svg { width: 100%; height: 100%; display: block; }
+  #face .ball { fill: var(--eye); }
+  #face .lid { fill: var(--bg); transform-box: fill-box; transition: transform .38s cubic-bezier(.3,.6,.2,1); }
+  #face .lid.top { transform-origin: 50% 0%; transform: scaleY(0); }
+  #face .lid.bot { transform-origin: 50% 100%; transform: scaleY(0); }
+  #face .gaze, #face .blink { transform-box: fill-box; transform-origin: center; }
+  #face .gaze { transition: transform .26s cubic-bezier(.2,.7,.2,1); }
+  #face .blink { transition: transform .09s ease-in; }
+  #face .breath { transform-box: fill-box; transform-origin: center; }
+  #face.asleep .breath { animation: breathe 4.2s ease-in-out infinite; }
+  @keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.025); } }
+  #face .drop { fill: #7FC8FF; opacity: 0; transition: opacity .4s; }
+  #face.hot .drop { opacity: .9; animation: sweat 1.6s ease-in infinite; }
+  @keyframes sweat { 0% { transform: translateY(0); } 100% { transform: translateY(26px); } }
+  #face .zz { font-family: var(--display); font-size: 46px; fill: var(--dim); opacity: 0; }
+  #face.asleep .zz { animation: zz 3.3s linear infinite; }
+  #face.asleep .zz.z2 { animation-delay: 1.1s; } #face.asleep .zz.z3 { animation-delay: 2.2s; }
+  @keyframes zz { 0% { opacity: 0; transform: translate(0,0); } 20% { opacity: .85; } 100% { opacity: 0; transform: translate(34px,-96px); } }
+  #face .fclock { position: absolute; right: 28px; bottom: 18px; font-family: var(--display); font-size: 22px; color: var(--dim); font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
@@ -156,6 +179,30 @@
     </main>
     <div class="banner" id="banner"></div>
     <div class="toast" id="toast"></div>
+    <div id="face" aria-hidden="true">
+      <svg viewBox="0 0 1540 720" id="faceSvg" aria-label="Idle face">
+        <defs><filter id="fglow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="16" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+        <g class="breath">
+          <g class="eye" transform="translate(546 352)">
+            <g class="gaze"><g class="blink">
+              <rect class="ball" x="-118" y="-142" width="236" height="284" rx="74" filter="url(#fglow)"/>
+              <rect class="lid top" x="-130" y="-156" width="260" height="312" rx="80"/>
+              <rect class="lid bot" x="-130" y="-156" width="260" height="312" rx="80"/>
+            </g></g>
+          </g>
+          <g class="eye" transform="translate(994 352)">
+            <g class="gaze"><g class="blink">
+              <rect class="ball" x="-118" y="-142" width="236" height="284" rx="74" filter="url(#fglow)"/>
+              <rect class="lid top" x="-130" y="-156" width="260" height="312" rx="80"/>
+              <rect class="lid bot" x="-130" y="-156" width="260" height="312" rx="80"/>
+            </g></g>
+          </g>
+          <path class="drop" d="M1190 158 c0 -30 24 -52 24 -84 c0 32 24 54 24 84 a24 24 0 0 1 -48 0 z"/>
+        </g>
+        <text class="zz z1" x="1210" y="236">z</text><text class="zz z2" x="1252" y="206">z</text><text class="zz z3" x="1294" y="176">z</text>
+      </svg>
+      <div class="fclock" id="faceClock">--:--</div>
+    </div>
   </div>
 </div>
 
@@ -163,6 +210,7 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const stage = $('stage');
+  window.__forceFace = new URLSearchParams(location.search).has('face');   // ?face previews the idle face
   function fit() {
     const s = Math.min(window.innerWidth / 1540, window.innerHeight / 720);
     stage.style.transform = `scale(${s})`;
@@ -412,9 +460,63 @@
     };
   }
 
+  // ---- idle face ---------------------------------------------------------
+  // Shown when the Mac has been left alone (idle_s from the agent) or is locked: two eyes that wander, blink,
+  // watch where the mouse is on the big screen, get sleepy late at night and react to a touch on the panel.
+  const face = (() => {
+    const el = $('face');
+    const eyes = Array.from(el.querySelectorAll('.eye')).map(e => ({ gaze: e.querySelector('.gaze'), blink: e.querySelector('.blink'), top: e.querySelector('.lid.top'), bot: e.querySelector('.lid.bot') }));
+    let cfg = { enabled: true, idle_min: 3, on_lock: true, follow_mouse: true, color: '#6FBFC6' };
+    let shown = false, mode = '', timers = [], lastTouch = 0, mouseAt = 0, mouse = { x: 0, y: 0.25 };
+    const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.push(t); return t; };
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    function look(x, y, ms) { eyes.forEach(e => { e.gaze.style.transition = `transform ${ms || 260}ms cubic-bezier(.2,.7,.2,1)`; e.gaze.style.transform = `translate(${(x * 74).toFixed(1)}px, ${(y * 44).toFixed(1)}px)`; }); }
+    function lids(top, bot) { eyes.forEach(e => { e.top.style.transform = `scaleY(${top})`; e.bot.style.transform = `scaleY(${bot})`; }); }
+    function blink(n) { eyes.forEach(e => { e.blink.style.transform = 'scaleY(0.06)'; }); later(() => { eyes.forEach(e => { e.blink.style.transform = 'scaleY(1)'; }); if (n > 1) later(() => blink(n - 1), 170); }, 95); }
+    function wander() {
+      if (!shown) return;
+      if (mode !== 'asleep') {
+        if (cfg.follow_mouse !== false && Date.now() - mouseAt < 5000 && Math.random() < 0.8) look(mouse.x + rnd(-0.06, 0.06), mouse.y + rnd(-0.05, 0.05), 300);
+        else if (Math.random() < 0.3) look(0, 0.1, 340);                          // look at whoever is there
+        else look(rnd(-1, 1), rnd(-0.45, 0.8), rnd(180, 400));
+      }
+      later(wander, mode === 'sleepy' ? rnd(2600, 5600) : rnd(1400, 4200));
+    }
+    function blinkLoop() { if (!shown) return; if (mode !== 'asleep') blink(Math.random() < 0.12 ? 2 : 1); later(blinkLoop, mode === 'sleepy' ? rnd(1200, 3200) : rnd(2200, 6500)); }
+    function setMode(m) {
+      if (m === mode) return;
+      mode = m; el.classList.toggle('asleep', m === 'asleep');
+      lids(m === 'asleep' ? 0.92 : m === 'sleepy' ? 0.42 : m === 'focused' ? 0.22 : 0, m === 'focused' ? 0.12 : 0);
+      if (m === 'asleep') look(0, 0.4, 1200);
+    }
+    function show() { shown = true; mode = ''; el.classList.add('show'); look(0, 0.1, 10); lids(0, 0); later(() => blink(1), 400); later(wander, 900); later(blinkLoop, 1600); }
+    function hide() { shown = false; mode = ''; el.classList.remove('show', 'asleep', 'hot'); timers.forEach(clearTimeout); timers = []; }
+    function update(d, c) {
+      if (c) cfg = Object.assign(cfg, c);
+      el.style.setProperty('--eye', cfg.color || '#6FBFC6');
+      const idle = d.idle_s || 0, now = Date.now();
+      const want = !!window.__forceFace || !!d.face_preview || (cfg.enabled !== false && ((d.locked && cfg.on_lock !== false) || idle >= (cfg.idle_min || 3) * 60));
+      if (want && !shown) show();
+      if (!want && shown && now - lastTouch > 1500) hide();
+      if (!shown) return;
+      if (d.gaze && d.gaze.x != null) { mouse = { x: (d.gaze.x - 0.5) * 2, y: 0.2 + d.gaze.y * 0.65 }; mouseAt = now; }   // the panel sits above the big screen: the mouse is below
+      const h = new Date().getHours(), night = h >= 23 || h < 6, cpu = (d.cpu || {}).load || 0, temp = Math.max((d.cpu || {}).temp || 0, (d.gpu || {}).temp || 0);
+      el.classList.toggle('hot', temp >= 88);
+      setMode(idle >= 45 * 60 ? 'asleep' : (night || idle >= 20 * 60) ? 'sleepy' : cpu >= 85 ? 'focused' : 'awake');
+    }
+    el.addEventListener('pointerdown', ev => {
+      const r = el.getBoundingClientRect(), w = r.width || 1540, hh = r.height || 720;
+      const x = ((ev.clientX - r.left) / w - 0.5) * 2, y = ((ev.clientY - r.top) / hh - 0.5) * 2;
+      lastTouch = Date.now(); look(x, y, 140); lids(0, 0.38); blink(1); later(() => lids(mode === 'sleepy' ? 0.42 : 0, 0), 900);
+    });
+    return { update, get shown() { return shown; }, get mode() { return mode; } };
+  })();
+  let latestCfg = null;
+
   async function start() {
     try {
       const cfg = await (await fetch('/api/config', { cache: 'no-store' })).json();
+      latestCfg = cfg;
       renderRight(cfg);
     } catch (e) {
       window.__standalone = true;
@@ -428,13 +530,14 @@
         catch (e) { d = demoStats(); d.lhm_ok = false; }
         if (d.cfg_version != null && d.cfg_version !== cfgVersion) {
           cfgVersion = d.cfg_version;
-          try { const cfg = await (await fetch('/api/config', { cache: 'no-store' })).json(); renderRight(cfg); } catch (e) { /* keep current layout */ }
+          try { const cfg = await (await fetch('/api/config', { cache: 'no-store' })).json(); latestCfg = cfg; renderRight(cfg); } catch (e) { /* keep current layout */ }
         }
       } else { d = demoStats(); }
       render(d);
+      face.update(d, latestCfg && latestCfg.face);
     }
     tick(); setInterval(tick, 500);
-    setInterval(() => { const n = new Date(); $('clock').textContent = n.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }, 1000);
+    setInterval(() => { const n = new Date(); const t = n.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); $('clock').textContent = t; $('faceClock').textContent = t; }, 1000);
   }
   start();
 })();

@@ -670,6 +670,27 @@ class TestServer(unittest.TestCase):
              mock.patch.object(agent.arrange, "activate_main_app", return_value=(True, "activated X")) as fallback:
             agent.focus_main_display(state); fallback.assert_called_once()
 
+    def test_face_settings_endpoint(self):
+        code, _, body = self.req("/api/admin/face", "POST", {"enabled": False, "idle_min": 999, "color": "#FF00AA", "on_lock": False, "follow_mouse": True})
+        self.assertEqual(code, 200); face = json.loads(body)["face"]
+        self.assertEqual((face["enabled"], face["idle_min"], face["color"], face["on_lock"]), (False, 180, "#FF00AA", False))   # clamped, kept
+        code, _, body = self.req("/api/admin/face", "POST", {"color": "red", "idle_min": "x", "enabled": True})
+        self.assertEqual(code, 200); face = json.loads(body)["face"]
+        self.assertEqual((face["enabled"], face["idle_min"], face["color"]), (True, 180, "#FF00AA"))                        # junk ignored
+        _, _, body = self.req("/api/config")
+        self.assertEqual(json.loads(body)["face"]["color"], "#FF00AA")
+        self.assertEqual(json.loads((self.tmp / "config.json").read_text())["face"]["idle_min"], 180)                     # persisted
+        self.req("/api/admin/face", "POST", {"idle_min": 3, "enabled": True, "on_lock": True, "color": "#6FBFC6"})
+
+    def test_face_preview_and_idle_fields_in_stats(self):
+        code, _, body = self.req("/api/admin/face/preview", "POST", {})
+        self.assertEqual(code, 200); self.assertGreater(self.state.face_preview_until, time.time())
+        time.sleep(0.7)
+        _, _, body = self.req("/api/stats"); d = json.loads(body)
+        self.assertTrue(d["face_preview"])
+        self.assertIn("idle_s", d); self.assertIn("locked", d); self.assertIsNone(d["gaze"])                      # dry run: no cursor
+        self.state.face_preview_until = 0
+
     def test_admin_open_opens_the_admin_page(self):
         with mock.patch.object(agent.subprocess, "Popen") as popen, mock.patch.object(agent, "open_url") as ou:
             code, _, body = self.req("/api/admin/open", "POST", {})
@@ -700,3 +721,28 @@ class TestServer(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestFace(unittest.TestCase):
+    def test_settings_validation(self):
+        out = agent.face_settings({"idle_min": 0, "color": "#abcdef", "on_lock": 0, "follow_mouse": "yes"}, agent.FACE_DEFAULTS)
+        self.assertEqual((out["idle_min"], out["color"], out["on_lock"], out["follow_mouse"], out["enabled"]), (1, "#abcdef", False, True, True))
+        self.assertEqual(agent.face_settings({}, agent.FACE_DEFAULTS), agent.FACE_DEFAULTS)
+
+    def test_config_gets_face_defaults(self):
+        tmp = Path(tempfile.mkdtemp()) / "config.json"
+        with mock.patch.object(agent, "CONFIG_PATH", tmp):
+            self.assertEqual(agent.load_config()["face"], agent.FACE_DEFAULTS)
+
+    def test_idle_fields_gaze_on_the_main_display(self):
+        state = agent.State()
+        main = {"id": 2, "x": 0, "y": 0, "w": 3840, "h": 1080, "px_w": 3840, "px_h": 1080, "main": True, "builtin": False}
+        with mock.patch.object(agent, "DRY_RUN", False), mock.patch.object(agent, "list_displays", return_value=[main]), \
+             mock.patch.object(agent.arrange, "cursor_position", return_value=(960.0, 540.0)), \
+             mock.patch.object(agent.idle_mod, "seconds_idle", return_value=12.0), mock.patch.object(agent.idle_mod, "screen_locked", return_value=False):
+            f = agent.idle_fields(state)
+        self.assertEqual((f["idle_s"], f["locked"], f["gaze"], f["face_preview"]), (12.0, False, {"x": 0.25, "y": 0.5}, False))
+        with mock.patch.object(agent, "DRY_RUN", False), mock.patch.object(agent.arrange, "cursor_position", return_value=(1900.0, -300.0)), \
+             mock.patch.object(agent.idle_mod, "seconds_idle", return_value=0.5), mock.patch.object(agent.idle_mod, "screen_locked", return_value=None):
+            f = agent.idle_fields(state)                                     # cached displays; cursor on the panel -> no gaze
+        self.assertIsNone(f["gaze"]); self.assertIsNone(f["locked"])

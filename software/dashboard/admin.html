@@ -112,6 +112,23 @@
       <div class="actions"><button class="btn" id="arrangeNow" type="button">Fix arrangement now</button><span class="msg" id="arrangeMsg"></span></div>
       <p class="hint" id="touchState">Touch: checking…</p>
     </section>
+    <section class="card" id="faceCard">
+      <div><p class="eyebrow">When you step away</p><h2>Idle face</h2></div>
+      <p class="hint">Leave the Mac alone for a few minutes, or lock the screen, and the panel shows a pair of eyes instead of the numbers: they wander, blink, watch where your mouse is on the big screen, get sleepy late at night and react when you touch the panel. Any touch or activity brings the dashboard back. (A sleeping Mac sends no picture at all, so the face shows while the Mac is awake but idle.)</p>
+      <div class="row">
+        <div class="field"><label for="faceIdle">Show after</label><select id="faceIdle"><option value="1">1 minute</option><option value="2">2 minutes</option><option value="3" selected>3 minutes</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="20">20 minutes</option><option value="45">45 minutes</option></select></div>
+        <div class="field"><label for="faceColor">Eye colour</label><input type="color" id="faceColor" value="#6FBFC6"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label class="mod" style="justify-content:flex-start"><input type="checkbox" id="faceOn" checked> show the face when idle</label></div>
+        <div class="field"><label class="mod" style="justify-content:flex-start"><input type="checkbox" id="faceLock" checked> also when the screen is locked</label></div>
+      </div>
+      <div class="row">
+        <div class="field"><label class="mod" style="justify-content:flex-start"><input type="checkbox" id="faceFollow" checked> eyes follow the mouse on the big screen</label></div>
+        <div class="field"><label>&nbsp;</label></div>
+      </div>
+      <div class="actions"><button class="btn" id="facePreview" type="button">Show it on the panel for 20 s</button><span class="msg" id="faceMsg"></span></div>
+    </section>
     <section class="card" id="rightCard">
       <div><p class="eyebrow">Right side of the panel</p><h2>Buttons, message feeds, or both</h2></div>
       <div class="field"><label for="rightSide">Layout</label>
@@ -350,6 +367,26 @@
     } catch (e) { el.textContent = 'Touch: agent not reachable'; }
   }
   touchState(); setInterval(touchState, 5000);
+  function faceLoad(cfg) {
+    const f = cfg && cfg.face; if (!f) return;
+    $('faceOn').checked = f.enabled !== false; $('faceLock').checked = f.on_lock !== false; $('faceFollow').checked = f.follow_mouse !== false;
+    $('faceIdle').value = String(f.idle_min || 3); if (!$('faceIdle').value) $('faceIdle').value = '3';
+    if (/^#[0-9a-fA-F]{6}$/.test(f.color || '')) $('faceColor').value = f.color;
+  }
+  async function faceSave() {
+    const out = $('faceMsg'); if (standalone) { say('Preview only.'); return; }
+    out.textContent = 'saving…'; out.className = 'msg';
+    try {
+      const j = await api('/api/admin/face', { enabled: $('faceOn').checked, idle_min: Number($('faceIdle').value), on_lock: $('faceLock').checked, follow_mouse: $('faceFollow').checked, color: $('faceColor').value });
+      out.textContent = j.ok ? 'saved' : (j.message || 'not saved'); out.className = 'msg ' + (j.ok ? 'ok' : 'err');
+    } catch (e) { out.textContent = 'agent not reachable'; out.className = 'msg err'; }
+  }
+  ['faceOn', 'faceLock', 'faceFollow', 'faceIdle', 'faceColor'].forEach(id => $(id).addEventListener('change', faceSave));
+  $('facePreview').addEventListener('click', async () => {
+    const out = $('faceMsg'); if (standalone) { say('Preview only.'); return; }
+    try { const j = await api('/api/admin/face/preview', {}); out.textContent = j.message; out.className = 'msg ok'; }
+    catch (e) { out.textContent = 'agent not reachable'; out.className = 'msg err'; }
+  });
   $('panelPos').addEventListener('change', arrangeNow);
   $('keepPanel').addEventListener('change', arrangeNow);
   const norm = (list) => { const b = (list || []).slice(0, SLOTS).map(x => ({ ...x })); while (b.length < SLOTS) b.push(EMPTY()); return b; };
@@ -480,7 +517,7 @@
   window.addEventListener('beforeunload', (e) => { if (isDirty() && !standalone) { e.preventDefault(); e.returnValue = ''; } });
 
   async function boot() {
-    try { const cfg = await (await fetch('/api/config', { cache: 'no-store' })).json(); buttons = norm(cfg.buttons); rightSide = cfg.right_side || 'feeds'; feeds = normFeeds(cfg.feeds); $('panelPos').value = cfg.panel_position || 'above'; $('keepPanel').checked = cfg.keep_panel_for_dock !== false; }
+    try { const cfg = await (await fetch('/api/config', { cache: 'no-store' })).json(); buttons = norm(cfg.buttons); faceLoad(cfg); rightSide = cfg.right_side || 'feeds'; feeds = normFeeds(cfg.feeds); $('panelPos').value = cfg.panel_position || 'above'; $('keepPanel').checked = cfg.keep_panel_for_dock !== false; }
     catch (e) {
       standalone = true; rightSide = 'three'; feeds = normFeeds(DEFAULT_FEEDS);
       buttons = norm([LIBRARY[0], LIBRARY[1], LIBRARY[2], LIBRARY[4], LIBRARY[6], LIBRARY[11], LIBRARY[26], LIBRARY[28], LIBRARY[16], LIBRARY[23], LIBRARY[21], LIBRARY[20]]);

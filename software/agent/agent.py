@@ -38,6 +38,7 @@ import keys_mac  # noqa: E402
 from displays import Kiosk, list_displays  # noqa: E402
 import arrange  # noqa: E402
 import touch as touch_mod
+import idle as idle_mod
 import feeds as feeds_mod  # noqa: E402
 from events import EventStore, from_claude_code, from_codex, from_generic  # noqa: E402
 from feeds import APP_PRESETS, SOURCES, FeedManager, TeamsFeed  # noqa: E402
@@ -60,6 +61,50 @@ def log(msg):
     print(time.strftime("%H:%M:%S"), msg, flush=True)
 
 
+FACE_DEFAULTS = {"enabled": True, "idle_min": 3, "on_lock": True, "follow_mouse": True, "color": "#6FBFC6"}
+
+
+def face_settings(body, current):
+    """Validated face settings from an admin request merged over the current ones."""
+    out = dict(current)
+    if "enabled" in body:
+        out["enabled"] = bool(body["enabled"])
+    if "idle_min" in body:
+        try:
+            out["idle_min"] = max(1, min(180, int(body["idle_min"])))
+        except (TypeError, ValueError):
+            pass
+    if "on_lock" in body:
+        out["on_lock"] = bool(body["on_lock"])
+    if "follow_mouse" in body:
+        out["follow_mouse"] = bool(body["follow_mouse"])
+    if isinstance(body.get("color"), str) and re.fullmatch(r"#[0-9a-fA-F]{6}", body["color"]):
+        out["color"] = body["color"]
+    return out
+
+
+def idle_fields(state):
+    """What the face needs from the agent: seconds idle, lock state, where the mouse is on the main display."""
+    now = time.time()
+    if now - state.displays_at > 3:
+        try:
+            state.displays_cache = list_displays()
+        except Exception:
+            state.displays_cache = []
+        state.displays_at = now
+    gaze = None
+    main = next((d for d in state.displays_cache if d.get("main")), None)
+    if main and not DRY_RUN:
+        try:
+            x, y = arrange.cursor_position()
+            if arrange.inside(main, x, y):
+                gaze = {"x": round((x - main["x"]) / max(1, main["w"]), 3), "y": round((y - main["y"]) / max(1, main["h"]), 3)}
+        except Exception:
+            gaze = None
+    return {"idle_s": idle_mod.seconds_idle(), "locked": idle_mod.screen_locked(), "gaze": gaze,
+            "face_preview": now < state.face_preview_until}
+
+
 def load_config():
     if not CONFIG_PATH.exists():
         CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -74,6 +119,9 @@ def load_config():
     cfg.setdefault("right_side", "three")
     cfg.setdefault("panel_position", "above")       # where the panel sits relative to the main display
     cfg.setdefault("keep_panel_for_dock", True)     # never let the panel become the main display
+    face = cfg.setdefault("face", {})               # the idle face: eyes on the panel when the Mac is left alone
+    for k, v in FACE_DEFAULTS.items():
+        face.setdefault(k, v)
     if not cfg.get("feeds"):
         cfg["feeds"] = json.loads(json.dumps(DEFAULT_FEEDS))
     cfg["_pc_name"] = cfg.get("pc_name") or computer_name()   # runtime only, never saved
@@ -157,6 +205,8 @@ class State:
         self.kiosk = None       # the dashboard window (set when the kiosk runs)
         self.last_main_cursor = None   # where the mouse last was on the main display
         self.last_front_pid = None     # the app that was active before a tap made the dashboard active
+        self.face_preview_until = 0.0  # admin page: show the idle face on the panel for a moment
+        self.displays_cache, self.displays_at = [], 0.0
         self.touch = None       # touch mapper supervisor (set when the kiosk runs)
 
     def set(self, stats):
@@ -219,6 +269,10 @@ def poll_loop(state, cfg, sensors):
         payload.update({"ts": int(time.time() * 1000), "demo": False, "lhm_ok": payload.get("sensors") == "macmon",
                         "pc_name": cfg["_pc_name"], "mic_muted": state.mic_muted, "cfg_version": state.cfg_version,
                         "caps": dict(state.caps)})
+        try:
+            payload.update(idle_fields(state))
+        except Exception as exc:
+            log(f"[idle] {type(exc).__name__}: {exc}")
         state.set(payload)
         time.sleep(interval)
 
@@ -489,7 +543,8 @@ def make_handler(state, cfg, feeds_mgr=None, events=None):
             if path == "/api/config":
                 return self._json(200, {"pc_name": cfg["_pc_name"], "buttons": cfg["buttons"], "cfg_version": state.cfg_version, "platform": "mac",
                                         "right_side": cfg.get("right_side", "feeds"), "feeds": public_feeds(cfg), "app_presets": list(APP_PRESETS),
-                                        "panel_position": cfg.get("panel_position", "above"), "keep_panel_for_dock": cfg.get("keep_panel_for_dock", True)})
+                                        "panel_position": cfg.get("panel_position", "above"), "keep_panel_for_dock": cfg.get("keep_panel_for_dock", True),
+                                        "face": dict(cfg.get("face", FACE_DEFAULTS))})
             if path == "/api/feeds":
                 return self._json(200, {"right_side": cfg.get("right_side", "feeds"), "feeds": feeds_mgr.snapshot() if feeds_mgr else []})
             if path == "/api/events":
@@ -582,6 +637,18 @@ def make_handler(state, cfg, feeds_mgr=None, events=None):
                     return self._json(200 if r.returncode == 0 else 500, {"ok": r.returncode == 0, "result": json.loads(r.stdout or "{}"), "message": r.stderr.strip()[:300]})
                 except Exception as exc:
                     return self._json(500, {"ok": False, "message": str(exc)})
+            if path == "/api/admin/face":
+                body = self._body() or {}
+                cfg["face"] = face_settings(body, cfg.get("face", FACE_DEFAULTS))
+                try:
+                    save_config(cfg)
+                except OSError as exc:
+                    return self._json(500, {"ok": False, "message": f"could not save: {exc}"})
+                state.cfg_version += 1
+                return self._json(200, {"ok": True, "message": "saved", "face": cfg["face"]})
+            if path == "/api/admin/face/preview":
+                state.face_preview_until = time.time() + 20
+                return self._json(200, {"ok": True, "message": "the face is on the panel for 20 seconds"})
             if path == "/api/admin/arrange":
                 body = self._body() or {}
                 if body.get("position") in arrange.POSITIONS:
