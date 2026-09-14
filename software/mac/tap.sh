@@ -52,7 +52,7 @@ cask "pc-stats-panel" do
   app "PC Stats Panel.app"
 
   # Registers (or re-registers, after an upgrade) the login item; no dialog.
-  postflight do
+  postflight_steps do
     system_command "#{appdir}/PC Stats Panel.app/Contents/MacOS/PCStatsPanel", args: ["--setup"], must_succeed: false
   end
 
