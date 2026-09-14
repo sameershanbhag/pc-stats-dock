@@ -153,7 +153,10 @@ class TestDisplays(unittest.TestCase):
         with mock.patch.object(displays.subprocess, "Popen") as popen, mock.patch.object(k, "_pids", return_value=[]):
             proc = mock.Mock(); proc.poll.return_value = None; popen.return_value = proc
             with mock.patch.object(displays, "find_panel", return_value=FAKE_DISPLAYS[1]):
-                k.tick()                                     # panel appears -> open
+                k.tick()                                     # panel appears -> not yet: the display must settle first
+                self.assertFalse(popen.called)
+                k.panel_since -= displays.Kiosk.SETTLE
+                k.tick()                                     # settled -> open
             self.assertTrue(popen.called)
             args = popen.call_args[0][0]
             self.assertIn("--kiosk", args); self.assertIn("--window-position=3840,200", args); self.assertIn("--window-size=1540,720", args)
@@ -163,7 +166,7 @@ class TestDisplays(unittest.TestCase):
                 k.tick()                                     # still plugged, still running -> nothing
             self.assertFalse(popen.called)
             proc.poll.return_value = 0                       # window gone (closed, crashed, killed): comes back, rate limited
-            with mock.patch.object(displays, "find_panel", return_value=FAKE_DISPLAYS[1]):
+            with mock.patch.object(displays, "find_panel", return_value=FAKE_DISPLAYS[1]), mock.patch.object(k, "covers", return_value=True):
                 k.tick()
                 self.assertFalse(popen.called)
                 k.opened_at -= displays.Kiosk.REOPEN_EVERY
@@ -173,6 +176,39 @@ class TestDisplays(unittest.TestCase):
             with mock.patch.object(displays, "find_panel", return_value=None):
                 k.tick()                                     # unplug while running -> terminate
             self.assertTrue(proc.terminate.called)
+
+    def test_kiosk_fixes_a_window_that_is_not_full_screen(self):
+        logs = []
+        k = displays.Kiosk("http://127.0.0.1:4400/", 1540, 720, log=logs.append, profile="/tmp/kiosk-test-profile")
+        k.proc = mock.Mock(); k.proc.poll.return_value = None; k.proc.pid = 10
+        k.opened_at = time.time() - displays.Kiosk.FS_GRACE - 1; k.panel_since = time.time() - 60
+        panel = FAKE_DISPLAYS[1]
+        with mock.patch.object(displays, "find_panel", return_value=panel), mock.patch.object(k, "_pids", return_value=[10]), \
+             mock.patch.object(k, "nudge_fullscreen") as nudge, mock.patch.object(k, "close") as close:
+            with mock.patch.object(k, "covers", return_value=True):
+                k.tick(); nudge.assert_not_called()                             # full screen: nothing to do
+            with mock.patch.object(k, "covers", return_value=False):
+                k.tick(); nudge.assert_called_once(); close.assert_not_called()   # first: ask Chrome nicely
+                k.tick(); nudge.assert_called_once()                              # rate limited
+                k.last_fs_attempt -= displays.Kiosk.FS_RETRY
+                k.tick(); close.assert_called_once(); self.assertEqual(k.reopens, 1)   # then: reopen
+            with mock.patch.object(k, "covers", return_value=None):
+                k.last_fs_attempt -= displays.Kiosk.FS_RETRY
+                k.tick(); close.assert_called_once()                             # unknown: leave it alone
+        self.assertTrue(any("not full screen" in l for l in logs))
+
+    def test_kiosk_covers_reads_the_window_list(self):
+        k = displays.Kiosk("http://127.0.0.1:4400/", 1540, 720, log=print, profile="/tmp/kiosk-test-profile")
+        panel = FAKE_DISPLAYS[1]
+        import arrange
+        wins = [{"pid": 10, "app": "Google Chrome", "x": panel["x"], "y": panel["y"] + 30, "w": 1540, "h": 690}]
+        with mock.patch.object(k, "_pids", return_value=[10]), mock.patch.object(arrange, "_window_list", return_value=wins):
+            self.assertFalse(k.covers(panel))                                   # below the menu bar: not full screen
+        wins[0].update(y=panel["y"], h=720)
+        with mock.patch.object(k, "_pids", return_value=[10]), mock.patch.object(arrange, "_window_list", return_value=wins):
+            self.assertTrue(k.covers(panel))
+        with mock.patch.object(k, "_pids", return_value=[10]), mock.patch.object(arrange, "_window_list", return_value=None):
+            self.assertIsNone(k.covers(panel))
 
     def test_kiosk_adopts_window_from_previous_run(self):
         k = displays.Kiosk("http://127.0.0.1:4400/", 1540, 720, log=lambda m: None, profile="/tmp/kiosk-test-profile")

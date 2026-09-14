@@ -18,8 +18,8 @@
  *        -framework IOKit -DPYTHON=... -DAGENT=... -DAGENT_DIR=... launcher.c
  * Build (package.sh, everything inside the app bundle): the same with -DBUNDLED. Then python3 is found
  * at run time, the agent lives in Contents/Resources/app, "--service" is what the login item passes,
- * and opening the app from the Finder runs agent/setup.py to install (or "--uninstall" to remove) that
- * login item.
+ * and opening the app from the Finder runs agent/setup.py to install that login item ("--setup" does it
+ * without a dialog, "--uninstall" removes it, "--purge" removes it with all data).
  */
 #include <ApplicationServices/ApplicationServices.h>
 #include <IOKit/IOKitLib.h>
@@ -85,10 +85,10 @@ static void resolve_paths(const char *self) {
 }
 
 /* Run agent/setup.py (install or uninstall the login item) and return its exit status. */
-static int run_setup(const char *verb) {
+static int run_setup(const char *verb, const char *extra) {
     char setup[4096];
     snprintf(setup, sizeof setup, "%s/setup.py", g_agent_dir);
-    char *args[] = {g_python, setup, (char *)verb, "--app", g_bundle, NULL};
+    char *args[] = {g_python, setup, (char *)verb, "--app", g_bundle, (char *)extra, NULL};
     pid_t p = 0;
     int rc = posix_spawn(&p, g_python, NULL, NULL, args, environ);
     if (rc != 0) { fprintf(stderr, "PC Stats Panel: could not start %s: %s\n", g_python, strerror(rc)); return 1; }
@@ -615,10 +615,12 @@ int main(int argc, char **argv) {
     bool service = getenv("PCSTATS_SERVICE") != NULL;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--service") == 0) service = true;
-        if (strcmp(argv[i], "--uninstall") == 0) return run_setup("uninstall");
+        if (strcmp(argv[i], "--uninstall") == 0) return run_setup("uninstall", NULL);
+        if (strcmp(argv[i], "--purge") == 0) return run_setup("uninstall", "--purge");
+        if (strcmp(argv[i], "--setup") == 0) return run_setup("install", "--quiet");   /* Homebrew's postflight: no dialog */
     }
 #ifdef BUNDLED
-    if (!service) return run_setup("install");        /* opened from the Finder: set up the login item, then quit */
+    if (!service) return run_setup("install", NULL);  /* opened from the Finder: set up the login item, then quit */
 #else
     (void)service;
 #endif

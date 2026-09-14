@@ -83,6 +83,11 @@ class Kiosk:
     """
 
     REOPEN_EVERY = 5      # seconds between attempts if the window keeps disappearing
+    SETTLE = 3            # seconds the panel must have been present before the window opens (a Chrome launched the
+                          # instant a display appears comes up as a plain window instead of full screen)
+    FS_GRACE = 5          # seconds after opening before the window is checked for full screen
+    FS_RETRY = 10         # seconds between full-screen fixes
+    FS_REOPENS = 3        # reopen attempts per plug-in before giving up
 
     def __init__(self, url, width, height, log=print, profile=None):
         self.url, self.width, self.height, self.log = url, width, height, log
@@ -90,6 +95,10 @@ class Kiosk:
         self.profile = Path(profile) if profile else Path.home() / "Library" / "Application Support" / "pc-stats-dock" / "chrome"
         self.browser = find_browser()
         self.opened_at = 0.0
+        self.panel_since = None
+        self.fs_attempts = 0
+        self.last_fs_attempt = 0.0
+        self.reopens = 0
 
     def _pids(self):
         """The browser process started with our profile folder (also from an earlier agent run). Anchored on the
@@ -111,14 +120,68 @@ class Kiosk:
         return bool(self._pids())
 
     def tick(self):
-        """Panel connected and no dashboard window: open one. Panel gone: close it. Nothing else."""
+        """Panel connected and no dashboard window: open one (once the display has settled). Panel gone: close it.
+        Window open but not full screen: fix it."""
         panel = find_panel(self.width, self.height)
         running = self.running()
-        if panel and not running and time.time() - self.opened_at >= self.REOPEN_EVERY:
-            self.open(panel)
+        now = time.time()
+        if panel:
+            if self.panel_since is None:
+                self.panel_since = now
+        else:
+            self.panel_since = None
+            self.reopens = 0
+        if panel and not running:
+            if now - self.opened_at >= self.REOPEN_EVERY and now - self.panel_since >= self.SETTLE:
+                self.open(panel)
         elif not panel and running:
             self.log("[kiosk] panel unplugged, closing the dashboard window")
             self.close()
+        elif panel and running and now - self.opened_at >= self.FS_GRACE:
+            self.ensure_fullscreen(panel, now)
+
+    def covers(self, panel):
+        """True when a window of ours fills the panel, False when not, None when the window list is unavailable."""
+        import arrange
+        wins = arrange._window_list()
+        if wins is None:
+            return None
+        pids = set(self._pids())
+        if self.proc is not None:
+            pids.add(self.proc.pid)
+        return any(w["pid"] in pids and abs(w["x"] - panel["x"]) <= 1 and abs(w["y"] - panel["y"]) <= 1
+                   and w["w"] >= panel["w"] - 1 and w["h"] >= panel["h"] - 1 for w in wins)
+
+    def nudge_fullscreen(self):
+        """Ask Chrome's window to go full screen (what --kiosk should have done)."""
+        for pid in self._pids():
+            script = (f'tell application "System Events" to tell (first process whose unix id is {pid}) '
+                      f'to set value of attribute "AXFullScreen" of window 1 to true')
+            try:
+                subprocess.run(["/usr/bin/osascript", "-e", script], capture_output=True, text=True, timeout=8)
+            except (OSError, subprocess.SubprocessError):
+                pass
+
+    def ensure_fullscreen(self, panel, now):
+        if now - self.last_fs_attempt < self.FS_RETRY:
+            return
+        ok = self.covers(panel)
+        if ok is None or ok:
+            self.fs_attempts = 0
+            return
+        self.last_fs_attempt = now
+        self.fs_attempts += 1
+        if self.fs_attempts == 1:
+            self.log("[kiosk] dashboard window is not full screen; asking Chrome to go full screen")
+            self.nudge_fullscreen()
+        elif self.reopens < self.FS_REOPENS:
+            self.reopens += 1
+            self.fs_attempts = 0
+            self.log(f"[kiosk] still not full screen; reopening the dashboard window ({self.reopens}/{self.FS_REOPENS})")
+            self.close()
+        elif self.reopens == self.FS_REOPENS:
+            self.reopens += 1
+            self.log("[kiosk] could not get the dashboard window full screen; leaving it as it is")
 
     def open(self, panel):
         if not self.browser:

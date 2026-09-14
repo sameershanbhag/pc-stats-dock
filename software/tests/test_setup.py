@@ -77,7 +77,12 @@ class SetupTests(unittest.TestCase):
         self.assertFalse(setup.PLIST.exists())
         self.assertTrue(any(c[0] == "/bin/launchctl" and c[1] == "bootout" for c in calls))
         self.assertTrue(any(c[-1] == "--remove" for c in calls))
-        self.assertTrue(any(c[:3] == ["/usr/bin/tccutil", "reset", "Accessibility"] for c in calls))
+        self.assertFalse(any(c[:2] == ["/usr/bin/tccutil", "reset"] for c in calls))        # plain uninstall keeps the grant (upgrades)
+        calls.clear()
+        with mock.patch.object(setup, "run", side_effect=lambda argv, dry_run=False, timeout=60: (calls.append(argv), (0, ""))[1]):
+            self.assertEqual(setup.uninstall(self.app, purge=True), 0)
+        self.assertTrue(any(c[:3] == ["/usr/bin/tccutil", "reset", "Accessibility"] for c in calls))   # --purge wipes everything
+        self.assertTrue(any(c[0] == "/bin/rm" and str(setup.SUPPORT) in c for c in calls))
 
     def test_cli(self):
         with mock.patch.object(setup, "install", return_value=0) as inst:
@@ -85,7 +90,10 @@ class SetupTests(unittest.TestCase):
             inst.assert_called_once_with(str(self.app), False, True)
         with mock.patch.object(setup, "uninstall", return_value=0) as un:
             self.assertEqual(setup.main(["uninstall"]), 0)
-            un.assert_called_once_with(None, False)
+            un.assert_called_once_with(None, False, False)
+        with mock.patch.object(setup, "uninstall", return_value=0) as un:
+            self.assertEqual(setup.main(["uninstall", "--purge"]), 0)
+            un.assert_called_once_with(None, False, True)
 
 
 if __name__ == "__main__":

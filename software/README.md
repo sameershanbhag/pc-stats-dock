@@ -138,7 +138,8 @@ brew install --cask sameershanbhag/tap/pc-stats-panel
 
 Then open *PC Stats Panel* once (it sets itself up as a login item and quits), plug in the panel, and switch on
 *PC Stats Panel* under System Settings › Privacy & Security › Accessibility. `brew uninstall --cask pc-stats-panel`
-removes the login item and the app; `--zap` also removes your buttons and logs. Publishing a new version to the tap:
+removes the login item and the app; `--zap` also removes your buttons and logs. `brew upgrade --cask pc-stats-panel`
+updates in place: the login item is re-registered and the Accessibility switch survives. Publishing a new version to the tap:
 `zsh mac/tap.sh` after `mac/release.sh` and `gh release create`.
 
 ## Install from the app (no Terminal)

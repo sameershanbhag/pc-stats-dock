@@ -122,8 +122,8 @@ def install(app, dry_run=False, quiet=False):
     return 0
 
 
-def uninstall(app=None, dry_run=False):
-    print("== PC Stats Panel: removing the login item")
+def uninstall(app=None, dry_run=False, purge=False):
+    print("== PC Stats Panel: removing the login item" + (" and all data" if purge else ""))
     run(["/bin/launchctl", "bootout", domain(), str(PLIST)], dry_run)
     run(["/usr/bin/pkill", "-9", "-f", f"--user-data-dir={SUPPORT / 'chrome'}"], dry_run)
     if PLIST.exists() and not dry_run:
@@ -133,9 +133,13 @@ def uninstall(app=None, dry_run=False):
         run(["/bin/zsh", str(dock), "--remove"], dry_run, timeout=120)
     else:
         run(["/bin/rm", "-rf", str(HOME / "Applications" / "Stats Dock Admin.app")], dry_run)
-    run(["/usr/bin/tccutil", "reset", "Accessibility", LABEL], dry_run)
-    print(f"   done. Your buttons and feeds stay in {SUPPORT / 'config.json'}; delete that folder to remove them too,"
-          " and drag the app to the Trash.")
+    if purge:
+        run(["/usr/bin/tccutil", "reset", "Accessibility", LABEL], dry_run)      # the Accessibility grant survives plain uninstalls (upgrades)
+        run(["/bin/rm", "-rf", str(SUPPORT), str(LOGS), str(HOME / "Library" / "Caches" / "pc-stats-dock")], dry_run)
+        print("   done: login item, Dock icon, Accessibility entry, config, logs and caches removed. Drag the app to the Trash.")
+    else:
+        print(f"   done. Your buttons and feeds stay in {SUPPORT / 'config.json'} and the Accessibility grant is kept;"
+              " --purge removes everything. Drag the app to the Trash.")
     return 0
 
 
@@ -145,12 +149,13 @@ def main(argv=None):
     ap.add_argument("--app", help="path of PC Stats Panel.app")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--quiet", action="store_true", help="no dialog")
+    ap.add_argument("--purge", action="store_true", help="uninstall: also remove config, logs and the Accessibility entry")
     a = ap.parse_args(argv)
     if a.verb == "install":
         if not a.app:
             ap.error("--app is required for install")
         return install(a.app, a.dry_run, a.quiet)
-    return uninstall(a.app, a.dry_run)
+    return uninstall(a.app, a.dry_run, a.purge)
 
 
 if __name__ == "__main__":
