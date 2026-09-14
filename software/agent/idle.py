@@ -1,6 +1,8 @@
 """How long the Mac has been left alone, and whether the screen is locked. CoreGraphics, in-process, no helpers."""
 import ctypes
 import ctypes.util
+import re
+import subprocess
 
 _cg = None
 _cf = None
@@ -49,3 +51,22 @@ def screen_locked():
             cf.CFRelease(d)
     except Exception:
         return None
+
+
+DISPLAY_HOLD = re.compile(r"^\s*pid \d+\((?P<app>[^)]*)\): \[[^\]]*\] [\d:]+ (?:PreventUserIdleDisplaySleep|NoDisplaySleepAssertion)"
+                          r"(?: named: \"(?P<why>[^\"]*)\")?", re.M)
+
+
+def parse_display_holders(text):
+    """Processes asking macOS to keep the display awake, from `pmset -g assertions`: [{app, why}]."""
+    return [{"app": m.group("app"), "why": m.group("why") or ""} for m in DISPLAY_HOLD.finditer(text)]
+
+
+def display_awake_holder():
+    """The app that is keeping the display awake (a video is playing, a call is on), or None. ~40 ms; cache it."""
+    try:
+        out = subprocess.run(["/usr/bin/pmset", "-g", "assertions"], capture_output=True, timeout=5).stdout.decode("utf-8", "replace")
+    except (OSError, subprocess.SubprocessError):
+        return None
+    holders = parse_display_holders(out)
+    return holders[0] if holders else None

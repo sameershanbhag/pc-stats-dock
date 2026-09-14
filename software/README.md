@@ -125,7 +125,9 @@ If you would rather not have any of this, untick *keep the panel for the dock on
 Leave the Mac alone for a few minutes (3 by default), or lock the screen, and the panel shows a pair of eyes
 instead of the numbers. They wander and blink, watch where your mouse is on the big screen, narrow when the CPU
 is busy, sweat when things run hot, get sleepy late at night and after a long idle, and fall asleep after 45
-minutes. Touch the panel and they look at your finger; any activity on the Mac brings the dashboard back.
+minutes. While a video is playing (the player asks macOS to keep the display awake) the face comes after one
+minute instead, and the eyes mostly watch the big screen with you. Touch the panel and they look at your finger;
+any activity on the Mac brings the dashboard back.
 The admin page's *Idle face* card sets the delay, the eye colour and the lock-screen and mouse-following
 options, and can show the face on the panel for 20 seconds to try it. `http://localhost:4400/?face` previews
 it in a browser. A sleeping Mac sends no picture to the panel, so the face is for an awake but idle Mac.

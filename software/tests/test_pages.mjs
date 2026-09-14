@@ -40,10 +40,10 @@ const CONFIG = { pc_name: 'Test Mac', platform: 'mac', cfg_version: 1, face: { e
 async function testDashboardLive() {
   console.log('dashboard · live agent');
   const posted = [];
-  let statsVersion = 1; let configCalls = 0; let idleS = 0, locked = false;
+  let statsVersion = 1; let configCalls = 0; let idleS = 0, locked = false, video = null;
   const fetchImpl = (url, opts = {}) => {
     if (url.startsWith('/api/config')) { configCalls++; return json({ ...CONFIG, face: { ...CONFIG.face, on_lock: true }, cfg_version: statsVersion, buttons: statsVersion === 1 ? CONFIG.buttons : CONFIG.buttons.slice(0, 2) }); }
-    if (url.startsWith('/api/stats')) return json({ ...STATS, cfg_version: statsVersion, idle_s: idleS, locked, gaze: { x: 0.25, y: 0.5 } });
+    if (url.startsWith('/api/stats')) return json({ ...STATS, cfg_version: statsVersion, idle_s: idleS, locked, video, gaze: { x: 0.25, y: 0.5 } });
     if (url.startsWith('/api/action/')) { posted.push(url); return json({ ok: true, message: 'sent ctrl+left' }); }
     if (url.startsWith('/api/admin/open')) { posted.push(url); return json({ ok: true, message: 'opened' }); }
     return json({}, false, 404);
@@ -96,6 +96,10 @@ async function testDashboardLive() {
   check(face.classList.contains('show'), 'face shown while the screen is locked');
   locked = false; await sleep(700);
   check(!face.classList.contains('show'), 'face gone after unlock');
+  video = { app: 'Google Chrome', why: 'Video Wake Lock' }; idleS = 90; await sleep(700);
+  check(face.classList.contains('show'), 'face shown after a minute of a video playing (before the idle delay)');
+  video = null; await sleep(700);
+  check(!face.classList.contains('show'), 'face gone when the video stops and the idle delay is not reached');
   dom.window.close();
 }
 
@@ -230,7 +234,7 @@ async function testAdmin() {
   check(d.getElementById('faceIdle').value === '5' && d.getElementById('faceColor').value === '#e08c4c' && !d.getElementById('faceLock').checked, 'face card loads the settings');
   d.getElementById('faceOn').checked = false; d.getElementById('faceOn').dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(30);
   const fs = saves.find(x => x.face);
-  check(fs && fs.face.enabled === false && fs.face.idle_min === 5 && fs.face.color === '#e08c4c', `face settings saved (${JSON.stringify(fs)})`);
+  check(fs && fs.face.enabled === false && fs.face.idle_min === 5 && fs.face.color === '#e08c4c' && fs.face.on_video === true && fs.face.video_min === 1, `face settings saved (${JSON.stringify(fs)})`);
   d.getElementById('facePreview').click(); await sleep(30);
   check(saves.some(x => x.preview) && d.getElementById('faceMsg').textContent.includes('20 seconds'), 'face preview asks the agent');
   const tiles = d.querySelectorAll('#pgrid .tile');

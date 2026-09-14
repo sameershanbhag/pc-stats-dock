@@ -729,6 +729,22 @@ class TestFace(unittest.TestCase):
         self.assertEqual((out["idle_min"], out["color"], out["on_lock"], out["follow_mouse"], out["enabled"]), (1, "#abcdef", False, True, True))
         self.assertEqual(agent.face_settings({}, agent.FACE_DEFAULTS), agent.FACE_DEFAULTS)
 
+    def test_display_holders_parsed_from_pmset(self):
+        sample = """Assertion status system-wide:
+   PreventUserIdleDisplaySleep    1
+Listed by owning process:
+   pid 630(coreaudiod): [0x0007c3f300019ea2] 00:11:41 PreventUserIdleSystemSleep named: "com.apple.audio.context"
+   pid 3879(Google Chrome): [0x0000c1a20001a4e1] 00:02:11 PreventUserIdleDisplaySleep named: "Video Wake Lock"
+\tCreated for PID: 3901.
+   pid 612(bluetoothd): [0x0000005700098032] 01:49:23 UserIsActive named: "Bluetooth Incoming Connection Request"
+   pid 777(VLC): [0x0000c1a20001a4e9] 00:00:03 NoDisplaySleepAssertion named: "VLC media player"
+"""
+        import idle
+        self.assertEqual(idle.parse_display_holders(sample), [{"app": "Google Chrome", "why": "Video Wake Lock"}, {"app": "VLC", "why": "VLC media player"}])
+        self.assertEqual(idle.parse_display_holders("Listed by owning process:\n   pid 1(x): [0x1] 00:00:01 PreventUserIdleSystemSleep named: \"audio\"\n"), [])
+        self.assertEqual(agent.face_settings({"on_video": 0, "video_min": "0.7"}, agent.FACE_DEFAULTS)["video_min"], 0.5)
+        self.assertEqual(agent.face_settings({"video_min": 99}, agent.FACE_DEFAULTS)["video_min"], 60.0)
+
     def test_config_gets_face_defaults(self):
         tmp = Path(tempfile.mkdtemp()) / "config.json"
         with mock.patch.object(agent, "CONFIG_PATH", tmp):
@@ -739,9 +755,10 @@ class TestFace(unittest.TestCase):
         main = {"id": 2, "x": 0, "y": 0, "w": 3840, "h": 1080, "px_w": 3840, "px_h": 1080, "main": True, "builtin": False}
         with mock.patch.object(agent, "DRY_RUN", False), mock.patch.object(agent, "list_displays", return_value=[main]), \
              mock.patch.object(agent.arrange, "cursor_position", return_value=(960.0, 540.0)), \
-             mock.patch.object(agent.idle_mod, "seconds_idle", return_value=12.0), mock.patch.object(agent.idle_mod, "screen_locked", return_value=False):
+             mock.patch.object(agent.idle_mod, "seconds_idle", return_value=12.0), mock.patch.object(agent.idle_mod, "screen_locked", return_value=False), \
+             mock.patch.object(agent.idle_mod, "display_awake_holder", return_value={"app": "Google Chrome", "why": "Video Wake Lock"}):
             f = agent.idle_fields(state)
-        self.assertEqual((f["idle_s"], f["locked"], f["gaze"], f["face_preview"]), (12.0, False, {"x": 0.25, "y": 0.5}, False))
+        self.assertEqual((f["idle_s"], f["locked"], f["gaze"], f["face_preview"], f["video"]["app"]), (12.0, False, {"x": 0.25, "y": 0.5}, False, "Google Chrome"))
         with mock.patch.object(agent, "DRY_RUN", False), mock.patch.object(agent.arrange, "cursor_position", return_value=(1900.0, -300.0)), \
              mock.patch.object(agent.idle_mod, "seconds_idle", return_value=0.5), mock.patch.object(agent.idle_mod, "screen_locked", return_value=None):
             f = agent.idle_fields(state)                                     # cached displays; cursor on the panel -> no gaze

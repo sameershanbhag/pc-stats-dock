@@ -466,7 +466,7 @@
   const face = (() => {
     const el = $('face');
     const eyes = Array.from(el.querySelectorAll('.eye')).map(e => ({ gaze: e.querySelector('.gaze'), blink: e.querySelector('.blink'), top: e.querySelector('.lid.top'), bot: e.querySelector('.lid.bot') }));
-    let cfg = { enabled: true, idle_min: 3, on_lock: true, follow_mouse: true, color: '#6FBFC6' };
+    let cfg = { enabled: true, idle_min: 3, on_lock: true, follow_mouse: true, color: '#6FBFC6', on_video: true, video_min: 1 };
     let shown = false, mode = '', timers = [], lastTouch = 0, mouseAt = 0, mouse = { x: 0, y: 0.25 };
     const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.push(t); return t; };
     const rnd = (a, b) => a + Math.random() * (b - a);
@@ -475,18 +475,21 @@
     function blink(n) { eyes.forEach(e => { e.blink.style.transform = 'scaleY(0.06)'; }); later(() => { eyes.forEach(e => { e.blink.style.transform = 'scaleY(1)'; }); if (n > 1) later(() => blink(n - 1), 170); }, 95); }
     function wander() {
       if (!shown) return;
-      if (mode !== 'asleep') {
+      if (mode === 'watching') {                                                   // watching the film with you: eyes on the big screen below
+        if (Math.random() < 0.75) look(rnd(-0.35, 0.35), rnd(0.55, 0.85), rnd(500, 900));
+        else look(rnd(-1, 1), rnd(-0.2, 0.6), rnd(220, 420));
+      } else if (mode !== 'asleep') {
         if (cfg.follow_mouse !== false && Date.now() - mouseAt < 5000 && Math.random() < 0.8) look(mouse.x + rnd(-0.06, 0.06), mouse.y + rnd(-0.05, 0.05), 300);
         else if (Math.random() < 0.3) look(0, 0.1, 340);                          // look at whoever is there
         else look(rnd(-1, 1), rnd(-0.45, 0.8), rnd(180, 400));
       }
-      later(wander, mode === 'sleepy' ? rnd(2600, 5600) : rnd(1400, 4200));
+      later(wander, mode === 'sleepy' ? rnd(2600, 5600) : mode === 'watching' ? rnd(3000, 7000) : rnd(1400, 4200));
     }
     function blinkLoop() { if (!shown) return; if (mode !== 'asleep') blink(Math.random() < 0.12 ? 2 : 1); later(blinkLoop, mode === 'sleepy' ? rnd(1200, 3200) : rnd(2200, 6500)); }
     function setMode(m) {
       if (m === mode) return;
       mode = m; el.classList.toggle('asleep', m === 'asleep');
-      lids(m === 'asleep' ? 0.92 : m === 'sleepy' ? 0.42 : m === 'focused' ? 0.22 : 0, m === 'focused' ? 0.12 : 0);
+      lids(m === 'asleep' ? 0.92 : m === 'sleepy' ? 0.42 : m === 'focused' ? 0.22 : m === 'watching' ? 0.14 : 0, m === 'focused' ? 0.12 : 0);
       if (m === 'asleep') look(0, 0.4, 1200);
     }
     function show() { shown = true; mode = ''; el.classList.add('show'); look(0, 0.1, 10); lids(0, 0); later(() => blink(1), 400); later(wander, 900); later(blinkLoop, 1600); }
@@ -495,14 +498,15 @@
       if (c) cfg = Object.assign(cfg, c);
       el.style.setProperty('--eye', cfg.color || '#6FBFC6');
       const idle = d.idle_s || 0, now = Date.now();
-      const want = !!window.__forceFace || !!d.face_preview || (cfg.enabled !== false && ((d.locked && cfg.on_lock !== false) || idle >= (cfg.idle_min || 3) * 60));
+      const video = !!d.video && cfg.on_video !== false && idle >= (cfg.video_min || 1) * 60;   // a video is playing and nobody touches anything
+      const want = !!window.__forceFace || !!d.face_preview || (cfg.enabled !== false && ((d.locked && cfg.on_lock !== false) || video || idle >= (cfg.idle_min || 3) * 60));
       if (want && !shown) show();
       if (!want && shown && now - lastTouch > 1500) hide();
       if (!shown) return;
       if (d.gaze && d.gaze.x != null) { mouse = { x: (d.gaze.x - 0.5) * 2, y: 0.2 + d.gaze.y * 0.65 }; mouseAt = now; }   // the panel sits above the big screen: the mouse is below
       const h = new Date().getHours(), night = h >= 23 || h < 6, cpu = (d.cpu || {}).load || 0, temp = Math.max((d.cpu || {}).temp || 0, (d.gpu || {}).temp || 0);
       el.classList.toggle('hot', temp >= 88);
-      setMode(idle >= 45 * 60 ? 'asleep' : (night || idle >= 20 * 60) ? 'sleepy' : cpu >= 85 ? 'focused' : 'awake');
+      setMode(idle >= 45 * 60 ? 'asleep' : (night || idle >= 20 * 60) ? 'sleepy' : d.video ? 'watching' : cpu >= 85 ? 'focused' : 'awake');
     }
     el.addEventListener('pointerdown', ev => {
       const r = el.getBoundingClientRect(), w = r.width || 1540, hh = r.height || 720;

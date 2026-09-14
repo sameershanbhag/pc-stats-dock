@@ -61,7 +61,8 @@ def log(msg):
     print(time.strftime("%H:%M:%S"), msg, flush=True)
 
 
-FACE_DEFAULTS = {"enabled": True, "idle_min": 3, "on_lock": True, "follow_mouse": True, "color": "#6FBFC6"}
+FACE_DEFAULTS = {"enabled": True, "idle_min": 3, "on_lock": True, "follow_mouse": True, "color": "#6FBFC6",
+                 "on_video": True, "video_min": 1}      # a playing video keeps the display awake: the face comes sooner
 
 
 def face_settings(body, current):
@@ -78,6 +79,13 @@ def face_settings(body, current):
         out["on_lock"] = bool(body["on_lock"])
     if "follow_mouse" in body:
         out["follow_mouse"] = bool(body["follow_mouse"])
+    if "on_video" in body:
+        out["on_video"] = bool(body["on_video"])
+    if "video_min" in body:
+        try:
+            out["video_min"] = max(0.5, min(60.0, round(float(body["video_min"]) * 2) / 2))
+        except (TypeError, ValueError):
+            pass
     if isinstance(body.get("color"), str) and re.fullmatch(r"#[0-9a-fA-F]{6}", body["color"]):
         out["color"] = body["color"]
     return out
@@ -101,8 +109,11 @@ def idle_fields(state):
                 gaze = {"x": round((x - main["x"]) / max(1, main["w"]), 3), "y": round((y - main["y"]) / max(1, main["h"]), 3)}
         except Exception:
             gaze = None
+    if now - state.video_at > 5:                        # pmset is a helper process: not on every poll
+        state.video_cache = idle_mod.display_awake_holder()
+        state.video_at = now
     return {"idle_s": idle_mod.seconds_idle(), "locked": idle_mod.screen_locked(), "gaze": gaze,
-            "face_preview": now < state.face_preview_until}
+            "video": state.video_cache, "face_preview": now < state.face_preview_until}
 
 
 def load_config():
@@ -207,6 +218,7 @@ class State:
         self.last_front_pid = None     # the app that was active before a tap made the dashboard active
         self.face_preview_until = 0.0  # admin page: show the idle face on the panel for a moment
         self.displays_cache, self.displays_at = [], 0.0
+        self.video_cache, self.video_at = None, 0.0   # who keeps the display awake (a playing video)
         self.touch = None       # touch mapper supervisor (set when the kiosk runs)
 
     def set(self, stats):
