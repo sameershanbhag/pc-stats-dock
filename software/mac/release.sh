@@ -58,7 +58,9 @@ fi
 
 if [[ "$DMG" == "1" ]]; then
   echo "== 4/4 disk image"
-  zsh "$SRC/mac/package.sh" --app "$APP" --version "$VERSION" ${PROFILE:+--notarize "$PROFILE"}
+  pkg=(--app "$APP" --version "$VERSION")
+  [[ -n "$PROFILE" ]] && pkg+=(--notarize "$PROFILE")      # (zsh keeps ${X:+a b} as one word, so build an array)
+  zsh "$SRC/mac/package.sh" "${pkg[@]}"
 else
   echo "== 4/4 dmg skipped"; echo "   app: $APP"
 fi
