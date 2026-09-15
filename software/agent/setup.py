@@ -107,6 +107,14 @@ def install(app, dry_run=False, quiet=False):
     if dock.exists() and (HOME / "Applications" / "Stats Dock Admin.app").exists():
         run(["/bin/zsh", str(dock), "--remove"], dry_run, timeout=120)       # the menu bar icon replaced the Dock shortcut
         print("   Dock: the old Stats Dock Admin shortcut " + ("would be removed" if dry_run else "removed") + " (the gauge icon in the menu bar replaces it)")
+    hooks = app / "Contents" / "Resources" / "app" / "agent" / "hooks" / "install_hooks.py"
+    if hooks.exists():
+        code, out = run([sys.executable, str(hooks), "--repair"], dry_run, timeout=30)      # AI chat hooks follow the app
+        try:
+            summary = ", ".join(f"{k} {v}" for k, v in json.loads(out or "{}").items() if k != "generic")
+        except ValueError:
+            summary = out.strip()[:120]
+        print("   AI chat hooks: " + (summary or ("would be repaired" if dry_run else "checked")))
     trusted = bool(h and h.get("caps", {}).get("accessibility"))
     lines = ["PC Stats Panel is installed and starts at login.", ""]
     lines.append("• Plug in the panel: the dashboard opens on it by itself.")

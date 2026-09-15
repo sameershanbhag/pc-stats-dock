@@ -28,6 +28,17 @@ class TestFocusSpec(unittest.TestCase):
         s = events.focus_spec_from_env({"TERM": "xterm-ghostty", "TMUX_PANE": "%3"}, "/x/y", "/dev/ttys009")
         self.assertEqual((s["kind"], s["app"], s["tmux_pane"]), ("app", "Ghostty", "%3"))
         self.assertEqual(events.focus_spec_from_env({}, "", "")["kind"], "none")
+        # an editor's own chat panel: no terminal variables, but the helper path or the parent processes tell
+        s = events.focus_spec_from_env({"VSCODE_GIT_ASKPASS_MAIN": "/Applications/Visual Studio Code.app/Contents/Resources/app/extensions/git/dist/askpass-main.js"}, "/p/q", "")
+        self.assertEqual((s["kind"], s["app"], s["folder"]), ("editor", "VS Code", "/p/q"))
+        s = events.focus_spec_from_env({}, "/p/q", "", ancestors=["node", "Code Helper (Plugin)", "Electron", "launchd"])
+        self.assertEqual((s["kind"], s["app"]), ("editor", "VS Code"))
+        s = events.focus_spec_from_env({"TERM_PROGRAM": "vscode"}, "/p/q", "", ancestors=["zsh", "Cursor Helper (Plugin)", "Cursor"])
+        self.assertEqual((s["kind"], s["app"], s["bundle"]), ("editor", "Cursor", "com.todesktop.230313mzl4w4u92"), "Cursor's terminal says vscode; the process tree wins")
+        s = events.focus_spec_from_env({"CLAUDE_CODE_ENTRYPOINT": "local-agent"}, "/p/q", "", ancestors=["claude", "disclaimer", "Claude"])
+        self.assertEqual((s["kind"], s["app"], s["bundle"]), ("app", "Claude", "com.anthropic.claudefordesktop"))
+        s = events.focus_spec_from_env({"__CFBundleIdentifier": "com.mitchellh.ghostty"}, "/p/q", "", ancestors=["zsh", "ghostty"])
+        self.assertEqual(s["app"], "Ghostty", "a real terminal variable beats the process tree")
 
 
 class TestNormalizers(unittest.TestCase):
@@ -113,7 +124,9 @@ class TestInstaller(unittest.TestCase):
         s = json.loads((home / ".claude" / "settings.json").read_text())
         self.assertEqual(s["permissions"], {"allow": ["Bash(ls)"]}, "other settings untouched")
         self.assertEqual(len(s["hooks"]["Stop"]), 2, "existing Stop hook kept"); self.assertEqual(len(s["hooks"]["Notification"]), 1)
-        self.assertTrue(s["hooks"]["Stop"][1]["hooks"][0]["command"].endswith("claude_code_hook.py"))
+        cmd = s["hooks"]["Stop"][1]["hooks"][0]["command"]
+        self.assertEqual(cmd, str(home / "Library" / "Application Support" / "pc-stats-dock" / "hooks" / "claude_code_hook.py"), "registered at the stable folder")
+        self.assertTrue(os.access(cmd, os.X_OK), "stable copy is executable")
         self.assertIn("codex_notify.py", (home / ".codex" / "config.toml").read_text()); self.assertIn('model = "o3"', (home / ".codex" / "config.toml").read_text())
         self.assertTrue(json.loads((home / ".cursor" / "hooks.json").read_text())["hooks"]["stop"][0]["command"].endswith("cursor_hook.py"))
         out = self.run_installer(home)
@@ -123,6 +136,21 @@ class TestInstaller(unittest.TestCase):
         s = json.loads((home / ".claude" / "settings.json").read_text())
         self.assertEqual(len(s["hooks"]["Stop"]), 1); self.assertNotIn("Notification", s["hooks"])
         self.assertNotIn("codex_notify", (home / ".codex" / "config.toml").read_text())
+
+    def test_repair_repoints_a_stale_registration_and_adds_nothing(self):
+        home = Path(tempfile.mkdtemp()); (home / ".claude").mkdir()
+        stale = "/Users/x/Library/Application Support/pc-stats-dock/app/agent/hooks/claude_code_hook.py"     # the app folder of an old install
+        (home / ".claude" / "settings.json").write_text(json.dumps({"hooks": {"Stop": [{"hooks": [{"type": "command", "command": stale, "timeout": 5}]}]}}))
+        out = self.run_installer(home, "--repair")
+        self.assertEqual(out["claude_code"], "repaired")
+        s = json.loads((home / ".claude" / "settings.json").read_text())
+        stable = str(home / "Library" / "Application Support" / "pc-stats-dock" / "hooks" / "claude_code_hook.py")
+        self.assertEqual([h["command"] for e in s["hooks"]["Stop"] for h in e["hooks"]], [stable])
+        self.assertEqual([h["command"] for e in s["hooks"]["Notification"] for h in e["hooks"]], [stable], "the missing event is registered too")
+        self.assertEqual(self.run_installer(home, "--repair")["claude_code"], "already installed")
+        fresh = Path(tempfile.mkdtemp()); (fresh / ".claude").mkdir(); (fresh / ".claude" / "settings.json").write_text("{}")
+        out = self.run_installer(fresh, "--repair")
+        self.assertEqual(out["claude_code"], "not registered"); self.assertEqual(json.loads((fresh / ".claude" / "settings.json").read_text()), {})
 
     def test_missing_tools_are_skipped(self):
         home = Path(tempfile.mkdtemp())
@@ -147,6 +175,7 @@ class TestHookScript(unittest.TestCase):
         srv.shutdown()
         self.assertEqual(r.returncode, 0); self.assertEqual(r.stdout, "", "hooks must not print (Claude Code reads stdout)")
         self.assertEqual(posted["path"], "/api/events/claude-code")
+        self.assertIsInstance(posted["body"]["ancestors"], list); self.assertTrue(posted["body"]["ancestors"], "parent processes reported")
         self.assertEqual(posted["body"]["payload"]["session_id"], "abc"); self.assertEqual(posted["body"]["cwd"], "/tmp/proj"); self.assertEqual(posted["body"]["env"]["TERM_PROGRAM"], "Apple_Terminal")
 
     def test_hook_survives_agent_down(self):

@@ -66,12 +66,16 @@ app; tapping one jumps to that exact place:
 **Setup, once:** admin page → Right side → the AI chats feed → *Install hooks*. It adds a Stop
 and a Notification hook to Claude Code's `~/.claude/settings.json`, a `notify` program to Codex's
 `~/.codex/config.toml`, and a `stop` hook to Cursor's `~/.cursor/hooks.json` where those exist.
-Nothing else in those files is touched; *Uninstall* reverses it. First jump into each app asks
+The hook scripts are copied to `~/Library/Application Support/pc-stats-dock/hooks`, a folder that stays put
+across upgrades; the agent re-points a stale registration on every start, so the hooks keep working after the
+app moves. A chat is attributed to the app it runs in (VS Code's or Cursor's chat panel, their terminals, Terminal,
+iTerm, Ghostty, the Claude desktop app) from the hook's environment and its parent processes, so the jump lands
+in the right window. Nothing else in those files is touched; *Uninstall* reverses it. First jump into each app asks
 for the Automation permission ("PC Stats Panel wants to control Terminal"): click OK once.
 
 Any other tool or script can report too:
 ```
-~/Library/Application\ Support/pc-stats-dock/app/agent/hooks/notify.py --tool Gemini --title Finished --text "3 files changed"
+~/Library/Application\ Support/pc-stats-dock/hooks/notify.py --tool Gemini --title Finished --text "3 files changed"
 ```
 or `POST http://127.0.0.1:4400/api/events` with `{"tool","title","text","state","cwd"}`.
 

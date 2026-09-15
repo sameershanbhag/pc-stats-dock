@@ -20,6 +20,8 @@ class SetupTests(unittest.TestCase):
         (self.app / "Contents" / "MacOS" / "PCStatsPanel").write_text("#!/bin/sh\n")
         (self.app / "Contents" / "Resources" / "mac").mkdir(parents=True)
         (self.app / "Contents" / "Resources" / "mac" / "dock-admin.sh").write_text("echo dock\n")
+        (self.app / "Contents" / "Resources" / "app" / "agent" / "hooks").mkdir(parents=True)
+        (self.app / "Contents" / "Resources" / "app" / "agent" / "hooks" / "install_hooks.py").write_text("print('{}')\n")
         self.home = self.tmp / "home"
         self.patches = [mock.patch.object(setup, "HOME", self.home),
                         mock.patch.object(setup, "PLIST", self.home / "Library" / "LaunchAgents" / "com.pcstatsdock.agent.plist"),
@@ -57,6 +59,7 @@ class SetupTests(unittest.TestCase):
         verbs = [c[1] for c in calls if c[0] == "/bin/launchctl"]
         self.assertEqual(verbs[:2], ["bootout", "bootstrap"])                 # replace an earlier copy, then load
         self.assertFalse(any(c[0] == "/bin/zsh" and c[1].endswith("dock-admin.sh") for c in calls))  # no Dock shortcut: the menu bar icon replaced it
+        self.assertTrue(any(c[1].endswith("install_hooks.py") and c[2] == "--repair" for c in calls), "AI chat hooks re-pointed on install")
         (self.home / "Applications" / "Stats Dock Admin.app").mkdir(parents=True); calls.clear()
         with mock.patch.object(setup, "run", side_effect=fake_run), \
              mock.patch.object(setup, "health", return_value={"ok": True, "caps": {"accessibility": True}}):

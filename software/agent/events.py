@@ -25,15 +25,43 @@ HOSTS = {
     "com.microsoft.VSCode": ("VS Code", "com.microsoft.VSCode"), "vscode": ("VS Code", "com.microsoft.VSCode"),
     "com.todesktop.230313mzl4w4u92": ("Cursor", "com.todesktop.230313mzl4w4u92"),
     "com.exafunction.windsurf": ("Windsurf", "com.exafunction.windsurf"),
+    "com.anthropic.claudefordesktop": ("Claude", "com.anthropic.claudefordesktop"),
 }
 EDITORS = {"VS Code", "Cursor", "Windsurf"}
+# the app bundle a helper path or a parent process name belongs to (VS Code's extension host is "Code Helper (Plugin)")
+APP_MARKS = (("Visual Studio Code", "com.microsoft.VSCode"), ("Code Helper", "com.microsoft.VSCode"), ("Code - Insiders", "com.microsoft.VSCodeInsiders"),
+             ("Cursor", "com.todesktop.230313mzl4w4u92"), ("Windsurf", "com.exafunction.windsurf"), ("Claude", "com.anthropic.claudefordesktop"),
+             ("iTerm2", "com.googlecode.iterm2"), ("Terminal", "com.apple.Terminal"), ("ghostty", "com.mitchellh.ghostty"),
+             ("Warp", "dev.warp.Warp-Stable"), ("kitty", "net.kovidgoyal.kitty"), ("alacritty", "io.alacritty"), ("wezterm", "com.github.wez.wezterm"))
+HOSTS["com.microsoft.VSCodeInsiders"] = ("VS Code", "com.microsoft.VSCodeInsiders")
 
 
-def host_from_env(env):
+def host_from_marks(env, ancestors):
+    """The hosting app from the editor's helper path or from the parent processes, when the shell variables are silent."""
+    askpass = (env or {}).get("VSCODE_GIT_ASKPASS_MAIN") or ""
+    for mark, bundle in APP_MARKS:
+        if mark in askpass and bundle in HOSTS:
+            return HOSTS[bundle]
+    if (env or {}).get("CURSOR_TRACE_ID"):
+        return HOSTS["com.todesktop.230313mzl4w4u92"]
+    if (env or {}).get("CLAUDE_CODE_ENTRYPOINT") == "local-agent":
+        return HOSTS["com.anthropic.claudefordesktop"]
+    for name in ancestors or []:                                     # nearest first
+        low = name.lower()
+        for mark, bundle in APP_MARKS:
+            if (mark.lower() == low or low.startswith(mark.lower() + " ") or low.startswith(mark.lower() + "-")) and bundle in HOSTS:
+                return HOSTS[bundle]
+    return ("", "")
+
+
+def host_from_env(env, ancestors=None):
     bundle = (env or {}).get("__CFBundleIdentifier") or ""
     tp = (env or {}).get("TERM_PROGRAM") or ""
     if bundle in HOSTS:
         return HOSTS[bundle]
+    marked = host_from_marks(env, ancestors)                          # an editor's own chat panel: no terminal variables at all
+    if marked[0] in EDITORS or marked[0] == "Claude":
+        return marked
     if tp in HOSTS:
         return HOSTS[tp]
     term = (env or {}).get("TERM") or ""
@@ -41,13 +69,13 @@ def host_from_env(env):
         return HOSTS["ghostty"]
     if "kitty" in term:
         return HOSTS["net.kovidgoyal.kitty"]
-    return ("", "")
+    return marked
 
 
-def focus_spec_from_env(env, cwd="", tty=""):
+def focus_spec_from_env(env, cwd="", tty="", ancestors=None):
     """Where to jump back to, derived from the environment the hook ran in."""
     env = env or {}
-    name, bundle = host_from_env(env)
+    name, bundle = host_from_env(env, ancestors)
     spec = {"kind": "none", "app": name, "bundle": bundle, "cwd": cwd or "", "hint": os.path.basename((cwd or "").rstrip("/"))}
     if env.get("TMUX_PANE"):
         spec["tmux_pane"] = env["TMUX_PANE"]
@@ -99,7 +127,7 @@ def from_claude_code(body):
     needs = event == "Notification"
     title = (payload.get("message") or "Needs your attention") if needs else "Finished"
     preview = "" if needs else transcript_preview(payload.get("transcript_path", ""))
-    focus = focus_spec_from_env(body.get("env"), cwd, body.get("tty", ""))
+    focus = focus_spec_from_env(body.get("env"), cwd, body.get("tty", ""), body.get("ancestors"))
     return {"tool": "Claude Code", "state": "needs_input" if needs else "done", "title": title[:120], "text": preview,
             "project": focus["hint"] or "somewhere", "cwd": cwd, "session": payload.get("session_id") or "", "focus": focus}
 
@@ -107,7 +135,7 @@ def from_claude_code(body):
 def from_codex(body):
     payload = body.get("payload") or {}
     cwd = body.get("cwd") or ""
-    focus = focus_spec_from_env(body.get("env"), cwd, body.get("tty", ""))
+    focus = focus_spec_from_env(body.get("env"), cwd, body.get("tty", ""), body.get("ancestors"))
     kind = payload.get("type") or "agent-turn-complete"
     text = re.sub(r"\s+", " ", str(payload.get("last-assistant-message") or "")).strip()[:140]
     return {"tool": "Codex", "state": "done", "title": "Finished" if kind.endswith("complete") else kind, "text": text,
@@ -117,7 +145,7 @@ def from_codex(body):
 def from_generic(body):
     """Anything can post here: {tool, title, text, state, project, cwd, session, env, tty, focus}."""
     cwd = body.get("cwd") or ""
-    focus = body.get("focus") if isinstance(body.get("focus"), dict) else focus_spec_from_env(body.get("env"), cwd, body.get("tty", ""))
+    focus = body.get("focus") if isinstance(body.get("focus"), dict) else focus_spec_from_env(body.get("env"), cwd, body.get("tty", ""), body.get("ancestors"))
     state = body.get("state") if body.get("state") in ("done", "needs_input", "info") else "done"
     project = body.get("project") or focus.get("hint") or os.path.basename((cwd or focus.get("folder") or "").rstrip("/"))
     return {"tool": str(body.get("tool") or "AI")[:30], "state": state, "title": str(body.get("title") or "Finished")[:120],

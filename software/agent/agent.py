@@ -744,6 +744,19 @@ def run_later(fn, *args):
     threading.Thread(target=fn, args=args, daemon=True).start()
 
 
+def repair_ai_hooks():
+    """Re-point Claude Code / Codex / Cursor at the hook scripts' stable folder if a registration went stale
+    (the app moved or was upgraded). Adds nothing on its own."""
+    try:
+        r = subprocess.run([sys.executable, str(HERE / "hooks" / "install_hooks.py"), "--repair"], capture_output=True, text=True, timeout=30)
+        out = json.loads(r.stdout or "{}") if r.returncode == 0 else {}
+        fixed = [k for k, v in out.items() if v == "repaired"]
+        if fixed:
+            log("[hooks] re-pointed the AI chat hooks for " + ", ".join(fixed) + " at their stable folder")
+    except Exception as exc:
+        log(f"[hooks] {type(exc).__name__}: {exc}")
+
+
 def park_cursor_on_main(state):
     """A tap on the panel leaves the mouse cursor there, and macOS aims Spaces, Mission Control and
     Spotlight at the display under the cursor. Put it back where it was on the main display."""
@@ -878,6 +891,7 @@ def main():
         f"{'macmon' if sensors.stream.path else 'basic, install macmon for temperatures'}; "
         f"{'DRY RUN' if DRY_RUN else 'live'}; config {CONFIG_PATH})")
     if not DRY_RUN:
+        threading.Thread(target=repair_ai_hooks, daemon=True).start()
         trusted = keys_mac.ax_trusted(prompt=True)   # asks once at start, lists the app in Accessibility
         state.last_prompt = time.time()
         log("[permission] Accessibility: " + ("granted, key buttons work" if trusted else
