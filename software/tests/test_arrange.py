@@ -1,5 +1,6 @@
 """Display arrangement: parsing displayplacer, planning, sweeping (all subprocesses mocked)."""
 import sys
+import json
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -52,6 +53,27 @@ class TestArrange(unittest.TestCase):
         wrong_only = arrange.parse_list(text.replace("\n  mode 1: res:1540x720 hz:60 color_depth:4", ""))
         argv, panel, main = arrange.plan(wrong_only, (1540, 720), "above", "AAA")
         self.assertIn("id:AAA res:1920x1080 hz:60 color_depth:8 enabled:true scaling:off origin:(960,-1080) degree:0", argv[2], "native not offered: kept as it is, parked by its own size")
+
+    def test_panel_identified_by_name_or_size_when_native_mode_is_missing(self):
+        text = LIST.replace("Type: 24 inch external screen\nResolution: 1540x720", "Type: 10 inch external screen\nResolution: 800x600").replace(
+            "Resolutions for rotation 0: mode 0: res:1540x720", "Resolutions for rotation 0:\n  mode 0: res:800x600 hz:60 color_depth:4 <-- current mode\n  mode 1: res:1920x1080 hz:60 color_depth:4\n  mode 2: res:1280x720 hz:60 color_depth:4")
+        screens = arrange.parse_list(text)
+        self.assertEqual(arrange.identify_panel(screens, (1540, 720))["persistent"], "AAA", "found by its 10 inch size even while it is the main display")
+        names = {"T101F": [(800, 600, True)], "DELL P3425WE": [(3840, 1080, False)]}
+        self.assertEqual(arrange.identify_panel(screens, (1540, 720), "", "T101F", names)["persistent"], "AAA", "found by macOS's name for it")
+        self.assertEqual(arrange.identify_panel(screens, (1540, 720), "", "Other", {})["persistent"], "AAA", "found by its 10 inch size")
+        self.assertEqual(arrange.wanted_res(screens[0], (1540, 720)), (1920, 1080), "native missing: the sharpest TV mode")
+        big = arrange.parse_list(text.replace("Type: 10 inch", "Type: 27 inch"))
+        self.assertIsNone(arrange.identify_panel(big, (1540, 720), "", "Other", {}), "a 27 inch screen is not the panel")
+        self.assertEqual(arrange.inches_of({"type": "10 inch external screen"}), 10); self.assertIsNone(arrange.inches_of({"type": "MacBook built in screen"}))
+
+    def test_display_names_parsing(self):
+        sample = {"SPDisplaysDataType": [{"spdisplays_ndrvs": [{"_name": "T101F", "_spdisplays_pixels": "800 x 600", "spdisplays_main": "spdisplays_yes"},
+                                                              {"_name": "DELL P3425WE", "_spdisplays_resolution": "3440 x 1440 @ 60.00Hz"}]}]}
+        with mock.patch.object(arrange.subprocess, "run", return_value=mock.Mock(stdout=json.dumps(sample))):
+            self.assertEqual(arrange.display_names(), {"T101F": [(800, 600, True)], "DELL P3425WE": [(3440, 1440, False)]})
+        with mock.patch.object(arrange.subprocess, "run", side_effect=OSError("no")):
+            self.assertEqual(arrange.display_names(), {})
 
     def test_origins(self):
         self.assertEqual(arrange.panel_origin("above", (3840, 1080), (1540, 720)), (1150, -720))

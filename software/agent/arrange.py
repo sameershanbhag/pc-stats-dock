@@ -1,3 +1,4 @@
+import json
 """Keep the panel a dock, not a desktop: make sure the big monitor stays the main display, park the
 panel next to it, and move any windows that strayed onto the panel back to the main screen.
 
@@ -60,9 +61,31 @@ def native_res(panel_res):
     return tuple(panel_res)
 
 
-def identify_panel(screens, panel_res, panel_id=""):
-    """The screen that is the panel: the remembered display, or one running at the panel's resolution, or one that
-    merely OFFERS that resolution (macOS picked another mode for it, as it does over some HDMI links)."""
+def display_names():
+    """What macOS calls each display, from system_profiler: {name: [(px_w, px_h, is_main), ...]}. {} when unavailable."""
+    try:
+        r = subprocess.run(["/usr/sbin/system_profiler", "SPDisplaysDataType", "-json"], capture_output=True, text=True, timeout=25)
+        data = json.loads(r.stdout or "{}")
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return {}
+    out = {}
+    for gpu in data.get("SPDisplaysDataType", []):
+        for d in gpu.get("spdisplays_ndrvs", []):
+            m = re.search(r"(\d+)\s*x\s*(\d+)", str(d.get("_spdisplays_pixels") or d.get("_spdisplays_resolution") or ""))
+            if m:
+                out.setdefault(str(d.get("_name", "")), []).append((int(m.group(1)), int(m.group(2)), d.get("spdisplays_main") == "spdisplays_yes"))
+    return out
+
+
+def inches_of(screen):
+    m = re.match(r"(\d+)\s*inch", screen.get("type") or "")
+    return int(m.group(1)) if m else None
+
+
+def identify_panel(screens, panel_res, panel_id="", panel_name="", names=None):
+    """The screen that is the panel: the remembered display; one running at the panel's resolution; one that merely
+    OFFERS it (macOS picked another mode); one macOS calls by the panel's name (T101F), matched by its pixels; or,
+    last, a screen of the panel's physical size (about 10 inches). The two weakest signals need a second screen."""
     want = {tuple(panel_res), tuple(reversed(panel_res))}
     if panel_id:
         for s in screens:
@@ -71,21 +94,33 @@ def identify_panel(screens, panel_res, panel_id=""):
     for s in screens:
         if s.get("res") in want:
             return s
-    if len(screens) >= 2:                                # never mistake a lone monitor for the panel
-        for s in screens:
-            if want & set(s.get("modes") or []):        # main or not: macOS makes the panel main on first plug-in
-                return s
+    if len(screens) < 2:                                 # never mistake a lone monitor for the panel
+        return None
+    for s in screens:
+        if want & set(s.get("modes") or []):            # main or not: macOS makes the panel main on first plug-in
+            return s
+    for pw, ph, is_main in (names or {}).get(panel_name or "", []):
+        hits = [s for s in screens if s.get("res") in ((pw, ph), (ph, pw)) and bool(s.get("main")) == is_main]
+        if len(hits) == 1:
+            return hits[0]
+    small = [s for s in screens if inches_of(s) is not None and 8 <= inches_of(s) <= 13]
+    if len(small) == 1:
+        return small[0]
     return None
 
 
 def wanted_res(panel, panel_res):
-    """The resolution to run the panel at: its native one when it is offered, else what it has now."""
+    """The resolution to run the panel at: its native one when offered; else 1920x1080 when offered (the sharpest
+    of the TV modes macOS allows over HDMI); else what it has now."""
     want = {tuple(panel_res), tuple(reversed(panel_res))}
     if panel.get("res") in want:
         return panel["res"]
-    for m in panel.get("modes") or []:
+    modes = panel.get("modes") or []
+    for m in modes:
         if m in want:
             return m
+    if (1920, 1080) in modes and panel["res"] != (1920, 1080):
+        return (1920, 1080)
     return panel["res"]
 
 

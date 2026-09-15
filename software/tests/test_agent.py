@@ -166,6 +166,17 @@ class TestDisplays(unittest.TestCase):
             self.assertEqual(p["id"], 7, "recognised at 1920x1080 through its identity")
             agent.locate_panel(cfg, state, wrong); self.assertEqual(cur.call_count, 1, "displayplacer asked once per set of displays")
 
+    def test_locate_panel_by_name_over_hdmi_and_remembers_it(self):
+        cfg = {"panel_resolution": [1540, 720], "panel_id": "", "panel_name": "T101F", "panel_position": "above"}; state = agent.State()
+        ds = [FAKE_DISPLAYS[0], {"id": 9, "x": 3840, "y": 0, "w": 800, "h": 600, "px_w": 800, "px_h": 600, "main": False, "builtin": False}]
+        screens = [{"persistent": "MMM", "contextual": 3, "res": (3840, 1080), "modes": [(3840, 1080)], "main": True, "type": "49 inch external screen"},
+                   {"persistent": "PPP", "contextual": 9, "res": (800, 600), "modes": [(800, 600), (1920, 1080)], "type": "external screen"}]   # no size known: the name decides
+        with mock.patch.object(agent, "DRY_RUN", False), mock.patch.object(agent.arrange, "current", return_value=(screens, "")), \
+             mock.patch.object(agent.arrange, "display_names", return_value={"T101F": [(800, 600, False)]}) as names, mock.patch.object(agent, "save_config") as save:
+            p = agent.locate_panel(cfg, state, ds)
+            self.assertEqual(p["id"], 9); self.assertEqual(cfg["panel_id"], "PPP"); save.assert_called_once()
+            agent.locate_panel(cfg, state, ds); self.assertEqual(names.call_count, 1, "system_profiler asked once per set of displays")
+
     def test_touch_mapper_follows_the_panel_size(self):
         import touch
         logs = []

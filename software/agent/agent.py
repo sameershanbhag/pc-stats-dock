@@ -137,6 +137,7 @@ def load_config():
     cfg.setdefault("keep_panel_for_dock", True)     # never let the panel become the main display
     cfg.setdefault("menu_bar", True)                # the gauge icon in the menu bar (admin page, face preview, restart)
     cfg.setdefault("panel_id", "")                  # the panel's display identity, learned on first sight (survives wrong resolutions)
+    cfg.setdefault("panel_name", "T101F")           # what macOS calls the panel (its EDID name); the Magedok T101F by default
     face = cfg.setdefault("face", {})               # the idle face: eyes on the panel when the Mac is left alone
     for k, v in FACE_DEFAULTS.items():
         face.setdefault(k, v)
@@ -849,9 +850,29 @@ def locate_panel(cfg, state, ds=None):
         return panel
     screens = panel_screens(state, ids)
     sc = arrange.identify_panel(screens, (w, h), cfg.get("panel_id", ""))
+    if not sc:
+        sc = arrange.identify_panel(screens, (w, h), "", cfg.get("panel_name", ""), panel_names(state, ids))
     if sc and sc.get("contextual"):
-        return displays_find_panel(w, h, ids=(sc["contextual"],), displays=ds)
+        found = displays_find_panel(w, h, ids=(sc["contextual"],), displays=ds)
+        if found and not cfg.get("panel_id") and sc.get("persistent"):
+            cfg["panel_id"] = sc["persistent"]                # remember it: next time the identity alone is enough
+            try:
+                save_config(cfg)
+                log(f"[display] remembered the panel: {sc.get('type', 'display')} ({sc['persistent'][:8]}…), running at {found['w']}x{found['h']}")
+            except OSError:
+                pass
+        return found
     return None
+
+
+def panel_names(state, ids):
+    """system_profiler's display names, fetched once per set of connected displays (it takes a second)."""
+    cached_ids, names = getattr(state, "panel_names_cache", (None, None))
+    if cached_ids == ids and names is not None:
+        return names
+    names = arrange.display_names()
+    state.panel_names_cache = (ids, names)
+    return names
 
 
 def panel_screens(state, ids):
