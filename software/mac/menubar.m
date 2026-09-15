@@ -66,7 +66,9 @@
                 BOOL connected = [h[@"panel"][@"connected"] boolValue];
                 NSString *touch = h[@"touch"][@"state"] ?: @"off";
                 BOOL ax = [h[@"caps"][@"accessibility"] boolValue];
-                line = connected ? [NSString stringWithFormat:@"Panel connected · touch %@", touch] : @"Panel not connected";
+                BOOL unassigned = [h[@"panel"][@"unassigned"] boolValue];
+                line = connected ? [NSString stringWithFormat:@"Panel connected · touch %@", touch]
+                     : unassigned ? @"Panel connected but not set up: System Settings › Displays › Use as › Extended display" : @"Panel not connected";
                 if (!ax) line = [line stringByAppendingString:@" · needs Accessibility"];
             }
         }

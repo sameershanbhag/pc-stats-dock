@@ -43,6 +43,93 @@ CHROME_CANDIDATES = [
 ]
 
 
+_cg.CGGetOnlineDisplayList.argtypes = [ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32)]
+_cg.CGDisplayIsActive.argtypes = [ctypes.c_uint32]
+_cg.CGDisplayMirrorsDisplay.argtypes = [ctypes.c_uint32]
+_cg.CGDisplayMirrorsDisplay.restype = ctypes.c_uint32
+_cg.CGDisplayIsBuiltin.argtypes = [ctypes.c_uint32]
+
+
+def _ids(fn):
+    ids = (ctypes.c_uint32 * 16)()
+    n = ctypes.c_uint32(0)
+    fn(16, ids, ctypes.byref(n))
+    return [int(ids[i]) for i in range(n.value)]
+
+
+def online_ids():
+    return _ids(_cg.CGGetOnlineDisplayList)
+
+
+def active_ids():
+    return _ids(_cg.CGGetActiveDisplayList)
+
+
+def unassigned_displays():
+    """Displays that are connected but have no desktop of their own: macOS's "Choose to Mirror or Extend Display"
+    placeholder (inactive), or a display mirroring another one. [{id, mirrors}]"""
+    out = []
+    active = set(active_ids())
+    for d in online_ids():
+        if d not in active:
+            out.append({"id": d, "mirrors": 0})
+        else:
+            m = int(_cg.CGDisplayMirrorsDisplay(d))
+            if m:
+                out.append({"id": d, "mirrors": m})
+    return out
+
+
+def give_desktop(display_id, want=(1540, 720), origin=None):
+    """Try to give a connected display its own desktop: pick its 1540x720 mode when it has one (else its first
+    mode), stop it mirroring, and place it. Returns (ok, message). macOS refuses when the Mac has reached its
+    external-display limit."""
+    try:
+        _cg.CGDisplayCopyAllDisplayModes.restype = ctypes.c_void_p
+        _cg.CGDisplayCopyAllDisplayModes.argtypes = [ctypes.c_uint32, ctypes.c_void_p]
+        _cg.CGDisplayModeGetWidth.restype = ctypes.c_size_t
+        _cg.CGDisplayModeGetWidth.argtypes = [ctypes.c_void_p]
+        _cg.CGDisplayModeGetHeight.restype = ctypes.c_size_t
+        _cg.CGDisplayModeGetHeight.argtypes = [ctypes.c_void_p]
+        _cf = ctypes.CDLL("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
+        _cf.CFArrayGetCount.restype = ctypes.c_long
+        _cf.CFArrayGetCount.argtypes = [ctypes.c_void_p]
+        _cf.CFArrayGetValueAtIndex.restype = ctypes.c_void_p
+        _cf.CFArrayGetValueAtIndex.argtypes = [ctypes.c_void_p, ctypes.c_long]
+        _cf.CFRelease.argtypes = [ctypes.c_void_p]
+        modes = _cg.CGDisplayCopyAllDisplayModes(display_id, None)
+        if not modes:
+            return False, "no display modes"
+        chosen, first, found = None, None, None
+        for i in range(_cf.CFArrayGetCount(modes)):
+            m = _cf.CFArrayGetValueAtIndex(modes, i)
+            wh = (int(_cg.CGDisplayModeGetWidth(m)), int(_cg.CGDisplayModeGetHeight(m)))
+            first = first or m
+            if wh in (tuple(want), tuple(reversed(want))):
+                chosen, found = m, wh
+                break
+        chosen = chosen or first
+        _cg.CGBeginDisplayConfiguration.argtypes = [ctypes.POINTER(ctypes.c_void_p)]
+        _cg.CGConfigureDisplayMirrorOfDisplay.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32]
+        _cg.CGConfigureDisplayWithDisplayMode.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_void_p]
+        _cg.CGConfigureDisplayOrigin.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_int32, ctypes.c_int32]
+        _cg.CGCompleteDisplayConfiguration.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        cfg = ctypes.c_void_p()
+        err = _cg.CGBeginDisplayConfiguration(ctypes.byref(cfg))
+        if err:
+            _cf.CFRelease(modes)
+            return False, f"CGBeginDisplayConfiguration failed ({err})"
+        _cg.CGConfigureDisplayMirrorOfDisplay(cfg, display_id, 0)                  # kCGNullDirectDisplay: stop mirroring
+        err = _cg.CGConfigureDisplayWithDisplayMode(cfg, display_id, chosen, None)
+        if not err and origin:
+            _cg.CGConfigureDisplayOrigin(cfg, display_id, int(origin[0]), int(origin[1]))
+        err2 = _cg.CGCompleteDisplayConfiguration(cfg, 2)                            # kCGConfigurePermanently
+        _cf.CFRelease(modes)
+        if err or err2:
+            return False, f"macOS refused (error {err or err2}); this Mac may already drive as many external displays as it can"
+        return True, "gave the panel its own desktop" + (f" at {found[0]}x{found[1]}" if found else "")
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {exc}"
 def list_displays():
     ids = (ctypes.c_uint32 * 16)()
     n = ctypes.c_uint32(0)

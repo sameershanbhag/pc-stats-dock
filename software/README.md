@@ -126,6 +126,15 @@ fixes the screen arrangement and restarts the dock; its first line tells whether
 is mapped. Switch it off in the admin page's *Display* card. The older Dock shortcut (`mac/dock-admin.sh`) is no
 longer installed; run the script yourself if you prefer a Dock icon. The ⚙ on the dashboard still opens the admin page.
 
+## If the panel shows "Choose to Mirror or Extend Display"
+
+That screen is drawn by macOS: the panel is detected but has no desktop of its own. It happens over some
+HDMI links on macOS 15 and later (the panel looks like a TV and the default is to ask), and on a MacBook with
+a base M-series chip that already drives one external display (those chips support only one with the lid
+open). The agent tries once to give the panel a desktop itself and says so in the menu bar; if macOS refuses,
+choose the panel in System Settings › Displays and set *Use as* to *Extended display*, or use the USB-C cable
+instead of HDMI. When the Mac has reached its display limit, only mirroring or a DisplayLink adapter remains.
+
 ## Idle face
 
 Leave the Mac alone for a few minutes (3 by default), or lock the screen, and the panel shows a pair of eyes

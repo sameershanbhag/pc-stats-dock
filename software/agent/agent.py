@@ -35,7 +35,7 @@ DASHBOARD = HERE.parent / "dashboard"
 CONFIG_PATH = Path(os.environ.get("PCSTATS_CONFIG") or (Path.home() / "Library" / "Application Support" / "pc-stats-dock" / "config.json"))
 sys.path.insert(0, str(HERE))
 import keys_mac  # noqa: E402
-from displays import Kiosk, list_displays, find_panel as displays_find_panel  # noqa: E402
+from displays import Kiosk, list_displays, find_panel as displays_find_panel, unassigned_displays, give_desktop  # noqa: E402
 import arrange  # noqa: E402
 import touch as touch_mod
 import idle as idle_mod
@@ -228,6 +228,8 @@ class State:
         self.video_cache, self.video_at = None, 0.0   # who keeps the display awake (a playing video)
         self.menu = None               # the menu bar item supervisor (set in main)
         self.panel = None              # the panel display as last located (for the kiosk)
+        self.unassigned = None         # a connected display without a desktop of its own (id) and whether we tried
+        self.unassigned_tried = set()
         self.panel_screens = ([], None)   # displayplacer screens for a given set of display ids (cache)
         self.touch = None       # touch mapper supervisor (set when the kiosk runs)
 
@@ -562,7 +564,8 @@ def make_handler(state, cfg, feeds_mgr=None, events=None):
                 return self._json(200, {"ok": True, "sensors": state.get().get("sensors"), "caps": state.caps, "displays": ds,
                                         "touch": state.touch.status() if state.touch else {"state": "off"},
                                         "panel": {"connected": bool(panel), "main": bool(panel and panel["main"]), "position": cfg.get("panel_position", "above"), "keep": cfg.get("keep_panel_for_dock", True),
-                                                  "resolution": [panel["w"], panel["h"]] if panel else None, "native": [pw, ph], "remembered": bool(cfg.get("panel_id"))}})
+                                                  "resolution": [panel["w"], panel["h"]] if panel else None, "native": [pw, ph], "remembered": bool(cfg.get("panel_id")),
+                                                  "unassigned": bool(state.unassigned) and not panel}})
             if path == "/api/config":
                 return self._json(200, {"pc_name": cfg["_pc_name"], "buttons": cfg["buttons"], "cfg_version": state.cfg_version, "platform": "mac",
                                         "right_side": cfg.get("right_side", "feeds"), "feeds": public_feeds(cfg), "app_presets": list(APP_PRESETS),
@@ -801,6 +804,30 @@ def focus_main_display(state):
         log(f"[focus] {type(exc).__name__}: {exc}")
 
 
+def check_unassigned(cfg, state, ds):
+    """A display is connected but shows macOS's "Choose to Mirror or Extend Display" placeholder, or mirrors another
+    display: try once to give it a desktop of its own; say so either way."""
+    try:
+        pending = unassigned_displays() if not DRY_RUN else []
+    except Exception:
+        pending = []
+    if not pending:
+        state.unassigned = None
+        return
+    d = pending[0]
+    state.unassigned = d["id"]
+    if d["id"] in state.unassigned_tried:
+        return
+    state.unassigned_tried.add(d["id"])
+    w, h = cfg["panel_resolution"]
+    main = next((x for x in ds if x["main"]), None)
+    origin = arrange.panel_origin(cfg.get("panel_position", "above"), (main["w"], main["h"]), (w, h)) if main else None
+    what = "mirroring another display" if d["mirrors"] else "connected but not assigned a desktop"
+    ok, msg = give_desktop(d["id"], (w, h), origin)
+    log(f"[display] a display is {what}: {msg}" + ("" if ok else ". If it is the panel: System Settings › Displays › select it › Use as › Extended display"
+                                                    " (a MacBook with a base M-series chip drives only one external display with the lid open)"))
+
+
 def locate_panel(cfg, state, ds=None):
     """The panel among the displays: by its size, or by its identity when macOS gave it another resolution.
     Learns the identity (displayplacer's persistent id) the first time the panel is seen by size."""
@@ -879,6 +906,9 @@ def kiosk_loop(kiosk, cfg, state):
             if not panel:
                 state.arranged_for = None
                 state.panel_screens = ([], None)
+                check_unassigned(cfg, state, ds)
+            else:
+                state.unassigned = None
             state.panel = panel
             if state.touch:
                 state.touch.tick(panel, DRY_RUN)

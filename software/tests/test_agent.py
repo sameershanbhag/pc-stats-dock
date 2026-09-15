@@ -174,6 +174,27 @@ class TestDisplays(unittest.TestCase):
             m.tick({"id": 7, "w": 1920, "h": 1080, "main": False})
         self.assertEqual((m.w, m.h), (1920, 1080)); self.assertTrue(stop.called)
 
+    def test_unassigned_displays_are_detected(self):
+        with mock.patch.object(displays, "online_ids", return_value=[3, 9, 12]), mock.patch.object(displays, "active_ids", return_value=[3, 12]), \
+             mock.patch.object(displays._cg, "CGDisplayMirrorsDisplay", side_effect=lambda d: 3 if d == 12 else 0):
+            self.assertEqual(displays.unassigned_displays(), [{"id": 9, "mirrors": 0}, {"id": 12, "mirrors": 3}])
+        with mock.patch.object(displays, "online_ids", return_value=[3]), mock.patch.object(displays, "active_ids", return_value=[3]), \
+             mock.patch.object(displays._cg, "CGDisplayMirrorsDisplay", return_value=0):
+            self.assertEqual(displays.unassigned_displays(), [])
+
+    def test_check_unassigned_tries_once_and_reports(self):
+        cfg = {"panel_resolution": [1540, 720], "panel_position": "above"}; state = agent.State(); logs = []
+        main_only = [FAKE_DISPLAYS[0]]
+        with mock.patch.object(agent, "DRY_RUN", False), mock.patch.object(agent, "log", logs.append), \
+             mock.patch.object(agent, "unassigned_displays", return_value=[{"id": 9, "mirrors": 0}]), \
+             mock.patch.object(agent, "give_desktop", return_value=(False, "macOS refused (error 1000)")) as give:
+            agent.check_unassigned(cfg, state, main_only); agent.check_unassigned(cfg, state, main_only)
+        give.assert_called_once_with(9, (1540, 720), (1150, -720))
+        self.assertEqual(state.unassigned, 9); self.assertEqual(len(logs), 1); self.assertIn("Use as", logs[0])
+        with mock.patch.object(agent, "DRY_RUN", False), mock.patch.object(agent, "unassigned_displays", return_value=[]):
+            agent.check_unassigned(cfg, state, main_only)
+        self.assertIsNone(state.unassigned)
+
     def test_kiosk_opens_reopens_and_closes(self):
         logs = []
         k = displays.Kiosk("http://127.0.0.1:4400/", 1540, 720, log=logs.append, profile="/tmp/kiosk-test-profile")
@@ -644,6 +665,14 @@ class TestServer(unittest.TestCase):
             self.assertEqual(popen.call_args[0][0], [agent.OPEN, "slack://channel?team=T&id=C"])
             self.assertEqual(self.req("/api/feeds/open", "POST", {"url": "file:///etc/passwd"})[0], 400)
             self.assertEqual(self.req("/api/feeds/open", "POST", {"url": "https://evil.com"})[0], 400)
+
+    def test_health_reports_an_unassigned_display(self):
+        self.state.unassigned = 9
+        try:
+            _, _, body = self.req("/api/health")
+            self.assertTrue(json.loads(body)["panel"]["unassigned"])
+        finally:
+            self.state.unassigned = None
 
     def test_arrange_endpoint_and_health_panel(self):
         h = json.loads(self.req("/api/health")[2]); self.assertIn("panel", h); self.assertIn("main", h["panel"])
