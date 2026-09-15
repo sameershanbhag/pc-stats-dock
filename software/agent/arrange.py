@@ -23,12 +23,16 @@ def parse_list(text):
     for line in text.splitlines():
         line = line.strip()
         if line.startswith("Persistent screen id:"):
-            cur = {"persistent": line.split(":", 1)[1].strip()}
+            cur = {"persistent": line.split(":", 1)[1].strip(), "modes": []}
             screens.append(cur)
         elif cur is None:
             continue
         elif line.startswith("Contextual screen id:"):
             cur["contextual"] = int(line.split(":", 1)[1].strip() or 0)
+        elif line.startswith("Type:"):
+            cur["type"] = line.split(":", 1)[1].strip()
+        elif "mode " in line and "res:" in line:
+            cur["modes"] += [(int(a), int(b)) for a, b in re.findall(r"res:(\d+)x(\d+)", line)]
         elif line.startswith("Resolution:"):
             m = re.search(r"(\d+)x(\d+)", line)
             cur["res"] = (int(m.group(1)), int(m.group(2))) if m else None
@@ -52,23 +56,58 @@ def panel_origin(position, main_res, panel_res):
             "left": (-pw, mh - ph), "right": (mw, mh - ph)}.get(position, ((mw - pw) // 2, -ph))
 
 
-def plan(screens, panel_res, position="above"):
+def native_res(panel_res):
+    return tuple(panel_res)
+
+
+def identify_panel(screens, panel_res, panel_id=""):
+    """The screen that is the panel: the remembered display, or one running at the panel's resolution, or one that
+    merely OFFERS that resolution (macOS picked another mode for it, as it does over some HDMI links)."""
+    want = {tuple(panel_res), tuple(reversed(panel_res))}
+    if panel_id:
+        for s in screens:
+            if s.get("persistent") == panel_id:
+                return s
+    for s in screens:
+        if s.get("res") in want:
+            return s
+    if len(screens) >= 2:                                # never mistake a lone monitor for the panel
+        for s in screens:
+            if want & set(s.get("modes") or []):        # main or not: macOS makes the panel main on first plug-in
+                return s
+    return None
+
+
+def wanted_res(panel, panel_res):
+    """The resolution to run the panel at: its native one when it is offered, else what it has now."""
+    want = {tuple(panel_res), tuple(reversed(panel_res))}
+    if panel.get("res") in want:
+        return panel["res"]
+    for m in panel.get("modes") or []:
+        if m in want:
+            return m
+    return panel["res"]
+
+
+def plan(screens, panel_res, position="above", panel_id=""):
     """(command argv, panel screen, main screen) making the non-panel screen main and parking the panel."""
-    panel = next((s for s in screens if s["res"] in (tuple(panel_res), tuple(reversed(panel_res)))), None)
+    panel = identify_panel(screens, panel_res, panel_id)
     others = [s for s in screens if s is not panel]
     if not panel or not others:
         return None, panel, None
     main = next((s for s in others if s.get("main")), None) or max(others, key=lambda s: s["res"][0] * s["res"][1])
-    px, py = panel_origin(position, main["res"], panel["res"])
-    def spec(s, origin):
-        parts = [f"id:{s['persistent']}", f"res:{s['res'][0]}x{s['res'][1]}"]
-        if s.get("hz"):
+    target = wanted_res(panel, panel_res)
+    px, py = panel_origin(position, main["res"], target)
+    def spec(s, origin, res=None):
+        switching = res is not None and res != s["res"]
+        parts = [f"id:{s['persistent']}", f"res:{(res or s['res'])[0]}x{(res or s['res'])[1]}"]
+        if s.get("hz") and not switching:               # a new mode picks its own refresh rate and depth
             parts.append(f"hz:{s['hz']}")
-        if s.get("depth"):
+        if s.get("depth") and not switching:
             parts.append(f"color_depth:{s['depth']}")
         parts += ["enabled:true", f"scaling:{s.get('scaling', 'off')}", f"origin:({origin[0]},{origin[1]})", "degree:0"]
         return " ".join(parts)
-    argv = [displayplacer_path() or "displayplacer", spec(main, (0, 0)), spec(panel, (px, py))]
+    argv = [displayplacer_path() or "displayplacer", spec(main, (0, 0)), spec(panel, (px, py), target)]
     for s in others:
         if s is not main:
             argv.append(spec(s, s.get("origin", (0, 0))))
@@ -85,15 +124,16 @@ def current():
     return parse_list(r.stdout), ""
 
 
-def arrange(panel_res, position="above", dry_run=False):
+def arrange(panel_res, position="above", dry_run=False, panel_id=""):
     """Returns (changed, message)."""
     screens, err = current()
     if screens is None:
         return False, err
-    argv, panel, main = plan(screens, panel_res, position)
+    argv, panel, main = plan(screens, panel_res, position, panel_id)
     if not argv:
         return False, "panel not connected" if not panel else "only one display"
-    already = (not panel.get("main")) and panel.get("origin") == panel_origin(position, main["res"], panel["res"]) and main.get("main")
+    target = wanted_res(panel, panel_res)
+    already = (not panel.get("main")) and panel["res"] == target and panel.get("origin") == panel_origin(position, main["res"], target) and main.get("main")
     if already:
         return False, "arrangement already right"
     if dry_run:
@@ -101,7 +141,8 @@ def arrange(panel_res, position="above", dry_run=False):
     r = subprocess.run(argv, capture_output=True, text=True, timeout=20)
     if r.returncode != 0:
         return False, (r.stderr or r.stdout).strip()[:200] or "displayplacer failed"
-    return True, f"main display is {main['res'][0]}x{main['res'][1]}, panel parked {position}"
+    switched = f", switched from {panel['res'][0]}x{panel['res'][1]} to {target[0]}x{target[1]}" if panel["res"] != target else ""
+    return True, f"main display is {main['res'][0]}x{main['res'][1]}, panel parked {position}{switched}"
 
 
 SWEEP_ONE = """on run argv

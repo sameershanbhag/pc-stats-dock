@@ -37,6 +37,22 @@ class TestArrange(unittest.TestCase):
         self.assertIn("id:BBB res:3840x1080 hz:120 color_depth:8 enabled:true scaling:off origin:(0,0) degree:0", argv[1])
         self.assertIn("id:AAA res:1540x720 hz:60 color_depth:8 enabled:true scaling:off origin:(1150,1080) degree:0", argv[2])
 
+    def test_panel_identified_by_id_or_by_offered_mode_and_switched_back(self):
+        text = LIST.replace("Type: 24 inch external screen\nResolution: 1540x720", "Type: 10 inch external screen\nResolution: 1920x1080").replace(
+            "Resolutions for rotation 0: mode 0: res:1540x720", "Resolutions for rotation 0:\n  mode 0: res:1920x1080 hz:60 color_depth:4 <-- current mode\n  mode 1: res:1540x720 hz:60 color_depth:4")
+        screens = arrange.parse_list(text)
+        self.assertEqual(screens[0]["modes"], [(1920, 1080), (1540, 720)]); self.assertEqual(screens[0]["type"], "10 inch external screen")
+        self.assertEqual(arrange.identify_panel(screens, (1540, 720))["persistent"], "AAA", "found by the mode it offers, though it runs at 1920x1080")
+        self.assertEqual(arrange.identify_panel(screens, (1540, 720), "BBB")["persistent"], "BBB", "a remembered id wins")
+        self.assertIsNone(arrange.identify_panel(arrange.parse_list(LIST.replace("1540x720", "1280x800")), (1540, 720)))
+        self.assertIsNone(arrange.identify_panel(screens[:1], (1540, 720)), "a lone display is never taken for the panel by its modes")
+        argv, panel, main = arrange.plan(screens, (1540, 720), "above")
+        self.assertIn("id:AAA res:1540x720 enabled:true scaling:off origin:(1150,-720) degree:0", argv[2], "switched to the native mode, refresh rate left to macOS")
+        self.assertIn("id:BBB res:3840x1080 hz:120", argv[1])
+        wrong_only = arrange.parse_list(text.replace("\n  mode 1: res:1540x720 hz:60 color_depth:4", ""))
+        argv, panel, main = arrange.plan(wrong_only, (1540, 720), "above", "AAA")
+        self.assertIn("id:AAA res:1920x1080 hz:60 color_depth:4 enabled:true scaling:off origin:(960,-1080) degree:0", argv[2], "native not offered: kept as it is, parked by its own size")
+
     def test_origins(self):
         self.assertEqual(arrange.panel_origin("above", (3840, 1080), (1540, 720)), (1150, -720))
         self.assertEqual(arrange.panel_origin("left", (3840, 1080), (1540, 720)), (-1540, 360))

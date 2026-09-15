@@ -59,11 +59,16 @@ def list_displays():
     return out
 
 
-def find_panel(width, height):
-    """The display whose size matches the panel (points or pixels, either orientation)."""
-    for d in list_displays():
+def find_panel(width, height, ids=(), displays=None):
+    """The display whose size matches the panel (points or pixels, either orientation), or one of the display
+    ids known to be the panel (learned from its identity, so a wrong resolution still counts)."""
+    ds = list_displays() if displays is None else displays
+    for d in ds:
         sizes = {(d["w"], d["h"]), (d["px_w"], d["px_h"])}
         if (width, height) in sizes or (height, width) in sizes:
+            return d
+    for d in ds:
+        if d["id"] in ids:                                  # identity beats size; main or not (the arrangement step fixes main)
             return d
     return None
 
@@ -89,8 +94,9 @@ class Kiosk:
     FS_RETRY = 10         # seconds between full-screen fixes
     FS_REOPENS = 3        # reopen attempts per plug-in before giving up
 
-    def __init__(self, url, width, height, log=print, profile=None):
+    def __init__(self, url, width, height, log=print, profile=None, finder=None):
         self.url, self.width, self.height, self.log = url, width, height, log
+        self.finder = finder or (lambda: find_panel(self.width, self.height))   # the agent can hand in its own answer
         self.proc = None
         self.profile = Path(profile) if profile else Path.home() / "Library" / "Application Support" / "pc-stats-dock" / "chrome"
         self.browser = find_browser()
@@ -122,7 +128,7 @@ class Kiosk:
     def tick(self):
         """Panel connected and no dashboard window: open one (once the display has settled). Panel gone: close it.
         Window open but not full screen: fix it."""
-        panel = find_panel(self.width, self.height)
+        panel = self.finder()
         running = self.running()
         now = time.time()
         if panel:

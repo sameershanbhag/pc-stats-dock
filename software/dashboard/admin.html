@@ -364,7 +364,9 @@
                       'no touchscreen': 'Touch: no USB touchscreen found — is the panel’s USB cable connected?',
                       starting: 'Touch: starting…', 'waiting for panel': 'Touch: waiting for the panel',
                       error: 'Touch: ' + (t.note || 'error'), off: 'Touch: ' + (t.note || (p.connected ? 'off' : 'panel not connected')) };
-      el.textContent = words[t.state] || ('Touch: ' + t.state);
+      let line = words[t.state] || ('Touch: ' + t.state);
+      if (p.connected && p.resolution && p.native && (p.resolution[0] !== p.native[0] || p.resolution[1] !== p.native[1])) line += ' · panel runs at ' + p.resolution.join('×') + ' (its native ' + p.native.join('×') + ' is not offered on this link; the dashboard and touch adapt)';
+      el.textContent = line;
       el.className = 'hint' + (t.state === 'needs accessibility' || t.state === 'error' ? ' dirty' : '');
     } catch (e) { el.textContent = 'Touch: agent not reachable'; }
   }

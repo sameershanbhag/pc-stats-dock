@@ -35,7 +35,7 @@ DASHBOARD = HERE.parent / "dashboard"
 CONFIG_PATH = Path(os.environ.get("PCSTATS_CONFIG") or (Path.home() / "Library" / "Application Support" / "pc-stats-dock" / "config.json"))
 sys.path.insert(0, str(HERE))
 import keys_mac  # noqa: E402
-from displays import Kiosk, list_displays  # noqa: E402
+from displays import Kiosk, list_displays, find_panel as displays_find_panel  # noqa: E402
 import arrange  # noqa: E402
 import touch as touch_mod
 import idle as idle_mod
@@ -136,6 +136,7 @@ def load_config():
     cfg.setdefault("panel_position", "above")       # where the panel sits relative to the main display
     cfg.setdefault("keep_panel_for_dock", True)     # never let the panel become the main display
     cfg.setdefault("menu_bar", True)                # the gauge icon in the menu bar (admin page, face preview, restart)
+    cfg.setdefault("panel_id", "")                  # the panel's display identity, learned on first sight (survives wrong resolutions)
     face = cfg.setdefault("face", {})               # the idle face: eyes on the panel when the Mac is left alone
     for k, v in FACE_DEFAULTS.items():
         face.setdefault(k, v)
@@ -226,6 +227,8 @@ class State:
         self.displays_cache, self.displays_at = [], 0.0
         self.video_cache, self.video_at = None, 0.0   # who keeps the display awake (a playing video)
         self.menu = None               # the menu bar item supervisor (set in main)
+        self.panel = None              # the panel display as last located (for the kiosk)
+        self.panel_screens = ([], None)   # displayplacer screens for a given set of display ids (cache)
         self.touch = None       # touch mapper supervisor (set when the kiosk runs)
 
     def set(self, stats):
@@ -555,10 +558,11 @@ def make_handler(state, cfg, feeds_mgr=None, events=None):
             if path == "/api/health":
                 ds = list_displays()
                 pw, ph = cfg["panel_resolution"]
-                panel = next((d for d in ds if {(d["w"], d["h"]), (d["px_w"], d["px_h"])} & {(pw, ph), (ph, pw)}), None)
+                panel = locate_panel(cfg, state, ds)
                 return self._json(200, {"ok": True, "sensors": state.get().get("sensors"), "caps": state.caps, "displays": ds,
                                         "touch": state.touch.status() if state.touch else {"state": "off"},
-                                        "panel": {"connected": bool(panel), "main": bool(panel and panel["main"]), "position": cfg.get("panel_position", "above"), "keep": cfg.get("keep_panel_for_dock", True)}})
+                                        "panel": {"connected": bool(panel), "main": bool(panel and panel["main"]), "position": cfg.get("panel_position", "above"), "keep": cfg.get("keep_panel_for_dock", True),
+                                                  "resolution": [panel["w"], panel["h"]] if panel else None, "native": [pw, ph], "remembered": bool(cfg.get("panel_id"))}})
             if path == "/api/config":
                 return self._json(200, {"pc_name": cfg["_pc_name"], "buttons": cfg["buttons"], "cfg_version": state.cfg_version, "platform": "mac",
                                         "right_side": cfg.get("right_side", "feeds"), "feeds": public_feeds(cfg), "app_presets": list(APP_PRESETS),
@@ -797,17 +801,58 @@ def focus_main_display(state):
         log(f"[focus] {type(exc).__name__}: {exc}")
 
 
+def locate_panel(cfg, state, ds=None):
+    """The panel among the displays: by its size, or by its identity when macOS gave it another resolution.
+    Learns the identity (displayplacer's persistent id) the first time the panel is seen by size."""
+    w, h = cfg["panel_resolution"]
+    ds = list_displays() if ds is None else ds
+    panel = displays_find_panel(w, h, displays=ds)
+    ids = tuple(sorted(d["id"] for d in ds))
+    if panel or len(ds) < 2 or DRY_RUN:
+        if panel and not cfg.get("panel_id") and not DRY_RUN:
+            screens = panel_screens(state, ids)
+            match = next((sc for sc in screens if sc.get("contextual") == panel["id"]), None)
+            if match:
+                cfg["panel_id"] = match["persistent"]
+                try:
+                    save_config(cfg)
+                    log(f"[display] remembered the panel: {match.get('type', 'display')} ({match['persistent'][:8]}…)")
+                except OSError:
+                    pass
+        return panel
+    screens = panel_screens(state, ids)
+    sc = arrange.identify_panel(screens, (w, h), cfg.get("panel_id", ""))
+    if sc and sc.get("contextual"):
+        return displays_find_panel(w, h, ids=(sc["contextual"],), displays=ds)
+    return None
+
+
+def panel_screens(state, ids):
+    """displayplacer's view of the screens, fetched once per set of connected displays."""
+    cached_ids, screens = state.panel_screens
+    if cached_ids == ids and screens is not None:
+        return screens
+    try:
+        screens, _ = arrange.current()
+    except Exception:
+        screens = None
+    state.panel_screens = (ids, screens or [])
+    return screens or []
+
+
 def keep_panel_for_dock(cfg, state, force=False):
     """If the panel has become the main display (macOS does that on first plug-in), put the big
     monitor back as main, park the panel, and move windows that landed on the panel back."""
     w, h = cfg["panel_resolution"]
     ds = list_displays()
-    panel = next((d for d in ds if {(d["w"], d["h"]), (d["px_w"], d["px_h"])} & {(w, h), (h, w)}), None)
+    panel = locate_panel(cfg, state, ds)
     if not panel or len(ds) < 2:
         return False, "panel not connected" if not panel else "only one display"
     if not force and not panel["main"] and state.arranged_for == panel["id"]:
         return False, "already arranged"
-    changed, msg = arrange.arrange((w, h), cfg.get("panel_position", "above"), DRY_RUN)
+    changed, msg = arrange.arrange((w, h), cfg.get("panel_position", "above"), DRY_RUN, cfg.get("panel_id", ""))
+    if changed:
+        state.panel_screens = ([], None)                  # the mode may have changed: re-read next time
     notes = [msg]
     if changed and not DRY_RUN:
         time.sleep(2.5)
@@ -827,12 +872,14 @@ def kiosk_loop(kiosk, cfg, state):
         try:
             ds = list_displays()
             w, h = cfg["panel_resolution"]
-            panel = next((d for d in ds if {(d["w"], d["h"]), (d["px_w"], d["px_h"])} & {(w, h), (h, w)}), None)
+            panel = locate_panel(cfg, state, ds)
             if cfg.get("keep_panel_for_dock", True) and panel and (panel["main"] or state.arranged_for != panel["id"]) and len(ds) > 1:
                 keep_panel_for_dock(cfg, state)
                 panel = next((d for d in list_displays() if d["id"] == panel["id"]), panel)
             if not panel:
                 state.arranged_for = None
+                state.panel_screens = ([], None)
+            state.panel = panel
             if state.touch:
                 state.touch.tick(panel, DRY_RUN)
             main = next((d for d in ds if d["main"]), None)
@@ -879,7 +926,7 @@ def main():
     threading.Thread(target=poll_loop, args=(state, cfg, sensors), daemon=True).start()
     if cfg.get("kiosk", True) and not args.no_kiosk:
         w, h = cfg["panel_resolution"]
-        state.kiosk = Kiosk(f"http://127.0.0.1:{port}/", w, h, log)
+        state.kiosk = Kiosk(f"http://127.0.0.1:{port}/", w, h, log, finder=lambda: state.panel)
         state.touch = touch_mod.TouchMapper((w, h), log)
         state.menu = menubar_mod.MenuBar(cfg["port"], log)
         threading.Thread(target=kiosk_loop, args=(state.kiosk, cfg, state), daemon=True).start()

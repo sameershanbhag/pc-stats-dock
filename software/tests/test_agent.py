@@ -146,6 +146,34 @@ class TestDisplays(unittest.TestCase):
         with mock.patch.object(displays, "list_displays", return_value=hidpi):
             self.assertEqual(displays.find_panel(1540, 720)["id"], 7)
 
+    def test_find_panel_by_known_id(self):
+        odd = [FAKE_DISPLAYS[0], {"id": 9, "x": 3840, "y": 0, "w": 1920, "h": 1080, "px_w": 1920, "px_h": 1080, "main": False, "builtin": False}]
+        self.assertIsNone(displays.find_panel(1540, 720, displays=odd))
+        self.assertEqual(displays.find_panel(1540, 720, ids=(9,), displays=odd)["id"], 9)
+        self.assertEqual(displays.find_panel(1540, 720, ids=(3,), displays=odd)["id"], 3, "a known id counts even while it is main (first plug-in)")
+
+    def test_locate_panel_learns_and_uses_the_identity(self):
+        cfg = {"panel_resolution": [1540, 720], "panel_id": ""}; state = agent.State()
+        screens = [{"persistent": "PPP", "contextual": 7, "res": (1540, 720), "modes": [(1540, 720)], "type": "10 inch external screen"},
+                   {"persistent": "MMM", "contextual": 3, "res": (3840, 1080), "modes": [], "main": True}]
+        with mock.patch.object(agent, "DRY_RUN", False), mock.patch.object(agent.arrange, "current", return_value=(screens, "")), mock.patch.object(agent, "save_config") as save:
+            p = agent.locate_panel(cfg, state, FAKE_DISPLAYS)
+        self.assertEqual(p["id"], 7); self.assertEqual(cfg["panel_id"], "PPP"); save.assert_called_once()
+        wrong = [FAKE_DISPLAYS[0], {"id": 7, "x": 3840, "y": 0, "w": 1920, "h": 1080, "px_w": 1920, "px_h": 1080, "main": False, "builtin": False}]
+        screens[0]["res"] = (1920, 1080); state.panel_screens = ([], None)
+        with mock.patch.object(agent, "DRY_RUN", False), mock.patch.object(agent.arrange, "current", return_value=(screens, "")) as cur:
+            p = agent.locate_panel(cfg, state, wrong)
+            self.assertEqual(p["id"], 7, "recognised at 1920x1080 through its identity")
+            agent.locate_panel(cfg, state, wrong); self.assertEqual(cur.call_count, 1, "displayplacer asked once per set of displays")
+
+    def test_touch_mapper_follows_the_panel_size(self):
+        import touch
+        logs = []
+        m = touch.TouchMapper((1540, 720), logs.append, logfile=None, launcher="/nonexistent")
+        with mock.patch.object(m, "stop") as stop, mock.patch.object(m, "_start"), mock.patch.object(m, "_announce"):
+            m.tick({"id": 7, "w": 1920, "h": 1080, "main": False})
+        self.assertEqual((m.w, m.h), (1920, 1080)); self.assertTrue(stop.called)
+
     def test_kiosk_opens_reopens_and_closes(self):
         logs = []
         k = displays.Kiosk("http://127.0.0.1:4400/", 1540, 720, log=logs.append, profile="/tmp/kiosk-test-profile")

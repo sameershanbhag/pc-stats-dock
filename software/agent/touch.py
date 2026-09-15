@@ -62,6 +62,12 @@ class TouchMapper:
             self.reason = "panel is the main display"
         else:
             self.reason = None
+            size = (int(panel.get("w") or self.w), int(panel.get("h") or self.h))
+            if size not in ((self.w, self.h), (self.h, self.w)):        # macOS runs the panel at another resolution: map onto that
+                self._write(f"panel runs at {size[0]}x{size[1]} (not {self.w}x{self.h}); mapping touches onto that size")
+                self.w, self.h = size
+                self.stop()
+                self.exit_at = 0.0
         if self.reason or dry_run or not self.launcher:
             self.stop()
         elif not self.running() and time.time() - self.exit_at >= RETRY_AFTER:
