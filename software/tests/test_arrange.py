@@ -51,7 +51,7 @@ class TestArrange(unittest.TestCase):
         self.assertIn("id:BBB res:3840x1080 hz:120", argv[1])
         wrong_only = arrange.parse_list(text.replace("\n  mode 1: res:1540x720 hz:60 color_depth:4", ""))
         argv, panel, main = arrange.plan(wrong_only, (1540, 720), "above", "AAA")
-        self.assertIn("id:AAA res:1920x1080 hz:60 color_depth:4 enabled:true scaling:off origin:(960,-1080) degree:0", argv[2], "native not offered: kept as it is, parked by its own size")
+        self.assertIn("id:AAA res:1920x1080 hz:60 color_depth:8 enabled:true scaling:off origin:(960,-1080) degree:0", argv[2], "native not offered: kept as it is, parked by its own size")
 
     def test_origins(self):
         self.assertEqual(arrange.panel_origin("above", (3840, 1080), (1540, 720)), (1150, -720))
