@@ -750,6 +750,20 @@ class TestServer(unittest.TestCase):
         self.assertEqual(json.loads((self.tmp / "config.json").read_text())["face"]["idle_min"], 180)                     # persisted
         self.req("/api/admin/face", "POST", {"idle_min": 3, "enabled": True, "on_lock": True, "color": "#6FBFC6"})
 
+    def test_install_ai_hooks_runs_a_self_test_through_the_real_hook(self):
+        home = Path(tempfile.mkdtemp()); (home / ".claude").mkdir(); (home / ".claude" / "settings.json").write_text("{}")
+        with mock.patch.dict(os.environ, {"PCSTATS_HOME": str(home), "PCSTATS_MANAGED": str(home / "none.json")}):
+            code, _, body = self.req("/api/admin/install-ai-hooks", "POST", {})
+        self.assertEqual(code, 200, body); r = json.loads(body)["result"]
+        self.assertEqual(r["claude_code"], "installed"); self.assertEqual(r["test"], "delivered", r)
+        self.assertTrue((home / "Library" / "Application Support" / "pc-stats-dock" / "hooks" / "notify.py").exists())
+        _, _, body = self.req("/api/events")
+        items = json.loads(body); items = items if isinstance(items, list) else items.get("events", [])
+        self.assertTrue(any(e.get("tool") == "Hook test" for e in items), "the test event reached the feed")
+        with mock.patch.dict(os.environ, {"PCSTATS_HOME": str(home)}):
+            self.req("/api/admin/install-ai-hooks", "POST", {"uninstall": True})
+        self.assertEqual(json.loads((home / ".claude" / "settings.json").read_text()), {})
+
     def test_menu_bar_endpoint(self):
         code, _, body = self.req("/api/admin/menu", "POST", {"enabled": False})
         self.assertEqual(code, 200); self.assertFalse(json.loads(body)["menu_bar"])

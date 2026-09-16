@@ -658,10 +658,14 @@ def make_handler(state, cfg, feeds_mgr=None, events=None):
                 events.clear()
                 return self._json(200, {"ok": True})
             if path == "/api/admin/install-ai-hooks":
+                uninstall = bool((self._body() or {}).get("uninstall"))
                 try:
-                    r = subprocess.run([sys.executable, str(HERE / "hooks" / "install_hooks.py")] + (["--uninstall"] if (self._body() or {}).get("uninstall") else []),
+                    r = subprocess.run([sys.executable, str(HERE / "hooks" / "install_hooks.py")] + (["--uninstall"] if uninstall else []),
                                        capture_output=True, text=True, timeout=20)
-                    return self._json(200 if r.returncode == 0 else 500, {"ok": r.returncode == 0, "result": json.loads(r.stdout or "{}"), "message": r.stderr.strip()[:300]})
+                    result = json.loads(r.stdout or "{}")
+                    if r.returncode == 0 and not uninstall and events is not None:
+                        result["test"] = hook_self_test(events, self.server.server_address[1])
+                    return self._json(200 if r.returncode == 0 else 500, {"ok": r.returncode == 0, "result": result, "message": r.stderr.strip()[:300]})
                 except Exception as exc:
                     return self._json(500, {"ok": False, "message": str(exc)})
             if path == "/api/admin/face":
@@ -750,6 +754,26 @@ def make_handler(state, cfg, feeds_mgr=None, events=None):
 
 def run_later(fn, *args):
     threading.Thread(target=fn, args=args, daemon=True).start()
+
+
+def hook_self_test(events, port):
+    """Send one event through the installed hook script, the way a tool would, and see whether it arrives."""
+    home = Path(os.environ.get("PCSTATS_HOME") or Path.home())
+    script = home / "Library" / "Application Support" / "pc-stats-dock" / "hooks" / "notify.py"
+    if not script.exists():
+        return "not delivered (hook scripts missing)"
+    stamp = f"test-{int(time.time())}"
+    env = dict(os.environ, PCSTATS_AGENT=f"http://127.0.0.1:{port}")
+    try:
+        subprocess.run([sys.executable, str(script), "--tool", "Hook test", "--title", "Hooks are working", "--text", "Chats will appear here when they finish", "--session", stamp],
+                       env=env, capture_output=True, timeout=15)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return f"not delivered ({exc})"
+    for _ in range(30):
+        if any(e.get("session") == stamp for e in events.list(50)):
+            return "delivered"
+        time.sleep(0.1)
+    return "not delivered"
 
 
 def repair_ai_hooks():

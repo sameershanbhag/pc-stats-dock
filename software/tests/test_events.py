@@ -152,6 +152,17 @@ class TestInstaller(unittest.TestCase):
         out = self.run_installer(fresh, "--repair")
         self.assertEqual(out["claude_code"], "not registered"); self.assertEqual(json.loads((fresh / ".claude" / "settings.json").read_text()), {})
 
+    def test_policy_note_when_a_company_policy_disables_hooks(self):
+        home = Path(tempfile.mkdtemp()); (home / ".claude").mkdir(); (home / ".claude" / "settings.json").write_text("{}")
+        managed = home / "managed-settings.json"; managed.write_text(json.dumps({"disableAllHooks": True}))
+        env = dict(os.environ, PCSTATS_HOME=str(home), PCSTATS_MANAGED=str(managed))
+        r = subprocess.run([sys.executable, str(ROOT / "agent" / "hooks" / "install_hooks.py")], capture_output=True, text=True, env=env, timeout=20)
+        out = json.loads(r.stdout)
+        self.assertTrue(out["claude_code"].startswith("installed · but company policy"), out["claude_code"]); self.assertIn("disableAllHooks", out["claude_code"])
+        managed.write_text("{}")
+        r = subprocess.run([sys.executable, str(ROOT / "agent" / "hooks" / "install_hooks.py")], capture_output=True, text=True, env=env, timeout=20)
+        self.assertEqual(json.loads(r.stdout)["claude_code"], "already installed")
+
     def test_missing_tools_are_skipped(self):
         home = Path(tempfile.mkdtemp())
         out = self.run_installer(home)

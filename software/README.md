@@ -64,7 +64,10 @@ app; tapping one jumps to that exact place:
 | inside tmux | the pane, then the terminal app |
 
 **Setup, once:** admin page → Right side → the AI chats feed → *Install hooks*. It adds a Stop
-and a Notification hook to Claude Code's `~/.claude/settings.json`, a `notify` program to Codex's
+and a Notification hook to Claude Code's `~/.claude/settings.json` (one registration covers the terminal,
+the VS Code extension and the Claude desktop app, since they all run the same Claude Code), sends a test
+event through the hook so you can see it arrive on the panel, and warns when a company-managed Claude
+Code policy (`disableAllHooks` or `allowManagedHooksOnly` in managed-settings.json) stops user hooks; a `notify` program to Codex's
 `~/.codex/config.toml`, and a `stop` hook to Cursor's `~/.cursor/hooks.json` where those exist.
 The hook scripts are copied to `~/Library/Application Support/pc-stats-dock/hooks`, a folder that stays put
 across upgrades; the agent re-points a stale registration on every start, so the hooks keep working after the

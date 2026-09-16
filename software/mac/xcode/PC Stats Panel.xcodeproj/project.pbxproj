@@ -246,7 +246,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2.10;
+				CURRENT_PROJECT_VERSION = 2.11;
 				DEVELOPMENT_TEAM = HL52382HY3;
 				ENABLE_HARDENED_RUNTIME = YES;
 				EXECUTABLE_NAME = PCStatsPanel;
@@ -256,7 +256,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Info.plist;
-				MARKETING_VERSION = 2.10;
+				MARKETING_VERSION = 2.11;
 				OTHER_LDFLAGS = (
 					"-framework",
 					ApplicationServices,
@@ -276,7 +276,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2.10;
+				CURRENT_PROJECT_VERSION = 2.11;
 				DEVELOPMENT_TEAM = HL52382HY3;
 				ENABLE_HARDENED_RUNTIME = YES;
 				EXECUTABLE_NAME = PCStatsPanel;
@@ -286,7 +286,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Info.plist;
-				MARKETING_VERSION = 2.10;
+				MARKETING_VERSION = 2.11;
 				OTHER_LDFLAGS = (
 					"-framework",
 					ApplicationServices,

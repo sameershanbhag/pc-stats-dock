@@ -24,6 +24,21 @@ CODEX = HOME / ".codex" / "config.toml"
 CURSOR = HOME / ".cursor" / "hooks.json"
 PY = sys.executable or "python3"
 MARK = "pc-stats-dock"      # every path of ours contains it: the old app folder, the app bundle, the stable folder
+MANAGED = Path(os.environ.get("PCSTATS_MANAGED") or "/Library/Application Support/ClaudeCode/managed-settings.json")
+
+
+def hook_policy():
+    """A note when a Claude Code policy stops user hooks from running (company-managed Macs), else ''."""
+    notes = []
+    for label, path in (("company policy (managed-settings.json)", MANAGED), ("your settings.json", CLAUDE)):
+        try:
+            data = json.loads(path.read_text()) if path.exists() else {}
+        except (OSError, json.JSONDecodeError):
+            continue
+        for key in ("disableAllHooks", "allowManagedHooksOnly"):
+            if data.get(key) is True:
+                notes.append(f"{label} sets {key}: user hooks will not run")
+    return "; ".join(notes)
 
 
 def sync_stable():
@@ -84,7 +99,9 @@ def claude_code(mode):
         CLAUDE.write_text(json.dumps(settings, indent=2) + "\n")
     if mode == "uninstall":
         return "removed" if changed else "not present"
-    return ("repaired" if repaired else "installed") if changed else "already installed"
+    result = ("repaired" if repaired else "installed") if changed else "already installed"
+    policy = hook_policy()
+    return result + (" · but " + policy if policy else "")
 
 
 def codex(mode):
