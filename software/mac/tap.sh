@@ -51,9 +51,13 @@ cask "pc-stats-panel" do
 
   app "PC Stats Panel.app"
 
-  # Registers (or re-registers, after an upgrade) the login item; no dialog.
-  postflight do
-    system_command "#{appdir}/PC Stats Panel.app/Contents/MacOS/PCStatsPanel", args: ["--setup"], must_succeed: false
+  # Registers (or re-registers, after an upgrade) the login item; no dialog. The step runs in Homebrew's
+  # sandbox, so the folders the setup writes are declared (the hook files only when already registered).
+  postflight_steps do
+    run "PC Stats Panel.app/Contents/MacOS/PCStatsPanel", base: :appdir, args: ["--setup"], must_succeed: false,
+        writable_base: :home,
+        writable_paths: ["Library/LaunchAgents", "Library/Logs/pc-stats-dock", "Library/Application Support/pc-stats-dock",
+                         ".claude", ".copilot", ".codex", ".cursor"]
   end
 
   # Stops the agent and removes the login item; the Accessibility grant and your buttons survive an upgrade.
