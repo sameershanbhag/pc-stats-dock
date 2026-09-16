@@ -382,7 +382,7 @@
     if (f.source === 'ai') {
       const unseen = f.items.filter(i => !i.seen).length;
       st.textContent = unseen ? unseen + ' new' : (f.items.length ? 'all seen' : ''); st.classList.toggle('new', unseen > 0);
-      if (!f.items.length) { list.innerHTML = '<div class="empty">Nothing yet. When Claude Code, Codex or Cursor finish a turn, it shows up here. Tap an entry to jump to that window.</div>'; return; }
+      if (!f.items.length) { list.innerHTML = '<div class="empty">Nothing yet. When Claude Code, Copilot, Codex or Cursor finish a turn, it shows up here. Tap an entry to jump to that window.</div>'; return; }
       list.innerHTML = f.items.map(it => `<div class="msg ai ${it.seen ? '' : 'unseen'} ${it.state === 'needs_input' ? 'needs' : ''}" data-link="${esc(it.link || '')}"><span class="who">${esc(it.who)}</span><span class="when">${ago(it.ts)}</span><span class="where">${esc(it.where || '')}<span class="state"> · ${it.state === 'needs_input' ? 'needs you' : 'done'}</span></span><span class="text">${esc(it.text || '')}</span></div>`).join('');
     } else {
       if (!f.items.length) { list.innerHTML = '<div class="empty">No recent messages.</div>'; return; }

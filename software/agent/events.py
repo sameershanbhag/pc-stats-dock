@@ -119,8 +119,23 @@ def transcript_preview(path, limit=140):
     return ""
 
 
+def tool_of_hook(body, focus):
+    """Who ran the Claude-Code-style hook: Claude Code itself, or GitHub Copilot (VS Code's agent hooks read the same
+    files, and the Copilot CLI can be pointed at the same script)."""
+    env = body.get("env") or {}
+    payload = body.get("payload") or {}
+    ancestors = [str(a).lower() for a in (body.get("ancestors") or [])]
+    if env.get("CLAUDE_CODE_ENTRYPOINT") or (ancestors and ancestors[0] in ("claude", "claude-code")) or "/.claude/" in str(payload.get("transcript_path") or ""):
+        return "Claude Code"
+    if any(a.startswith("copilot") for a in ancestors) or "/.copilot/" in str(payload.get("transcript_path") or ""):
+        return "Copilot"
+    if focus.get("app") in EDITORS:
+        return "Copilot"
+    return "Claude Code"
+
+
 def from_claude_code(body):
-    """body = {"payload": <hook stdin JSON>, "env": {...}, "tty": "/dev/ttys003", "cwd": "..."}"""
+    """body = {"payload": <hook stdin JSON>, "env": {...}, "tty": "/dev/ttys003", "cwd": "...", "ancestors": [...]}"""
     payload = body.get("payload") or {}
     cwd = body.get("cwd") or payload.get("cwd") or ""
     event = payload.get("hook_event_name") or ""
@@ -128,7 +143,7 @@ def from_claude_code(body):
     title = (payload.get("message") or "Needs your attention") if needs else "Finished"
     preview = "" if needs else transcript_preview(payload.get("transcript_path", ""))
     focus = focus_spec_from_env(body.get("env"), cwd, body.get("tty", ""), body.get("ancestors"))
-    return {"tool": "Claude Code", "state": "needs_input" if needs else "done", "title": title[:120], "text": preview,
+    return {"tool": tool_of_hook(body, focus), "state": "needs_input" if needs else "done", "title": title[:120], "text": preview,
             "project": focus["hint"] or "somewhere", "cwd": cwd, "session": payload.get("session_id") or "", "focus": focus}
 
 

@@ -107,6 +107,27 @@ class TestFocusPlan(unittest.TestCase):
         self.assertFalse(ok); self.assertIn("Automation", msg)
 
 
+class TestToolOfHook(unittest.TestCase):
+    def test_copilot_versus_claude_code(self):
+        stop = {"hook_event_name": "Stop", "session_id": "s", "cwd": "/p/q"}
+        ev = events.from_claude_code({"payload": stop, "env": {}, "ancestors": ["node", "Code Helper (Plugin)", "Electron"]})
+        self.assertEqual((ev["tool"], ev["focus"]["app"]), ("Copilot", "VS Code"), "VS Code's own agent hooks without claude in the tree = Copilot Chat")
+        ev = events.from_claude_code({"payload": stop, "env": {"CLAUDE_CODE_ENTRYPOINT": "cli"}, "ancestors": ["claude", "node", "Code Helper (Plugin)"]})
+        self.assertEqual(ev["tool"], "Claude Code", "Claude Code inside VS Code stays Claude Code")
+        ev = events.from_claude_code({"payload": dict(stop, transcript_path="/Users/x/.claude/projects/p/s.jsonl"), "env": {}, "ancestors": ["zsh", "ghostty"]})
+        self.assertEqual(ev["tool"], "Claude Code")
+        ev = events.from_claude_code({"payload": stop, "env": {"TERM_PROGRAM": "ghostty"}, "ancestors": ["copilot", "zsh", "ghostty"]})
+        self.assertEqual((ev["tool"], ev["focus"]["app"]), ("Copilot", "Ghostty"), "the Copilot CLI in a terminal")
+        ev = events.from_claude_code({"payload": stop, "env": {"TERM_PROGRAM": "ghostty"}, "ancestors": ["zsh", "ghostty"]})
+        self.assertEqual(ev["tool"], "Claude Code", "nothing says Copilot: Claude Code")
+
+    def test_store_keeps_one_entry_per_session_and_tool(self):
+        store = events.EventStore(Path(tempfile.mkdtemp()) / "e.json")
+        store.add({"tool": "Copilot", "session": "s1", "title": "Finished", "state": "done"})
+        store.add({"tool": "Copilot", "session": "s1", "title": "Finished", "state": "done"})   # the second hook file firing for the same chat
+        self.assertEqual(len(store.list()), 1)
+
+
 class TestInstaller(unittest.TestCase):
     def run_installer(self, home, *args):
         env = dict(os.environ, PCSTATS_HOME=str(home))
@@ -121,6 +142,7 @@ class TestInstaller(unittest.TestCase):
         (home / ".cursor").mkdir()
         out = self.run_installer(home)
         self.assertEqual(out["claude_code"], "installed"); self.assertEqual(out["codex"], "installed"); self.assertTrue(out["cursor"].startswith("installed"))
+        self.assertTrue(out["copilot"].startswith("skipped"), "no VS Code or Copilot CLI in this fake home")
         s = json.loads((home / ".claude" / "settings.json").read_text())
         self.assertEqual(s["permissions"], {"allow": ["Bash(ls)"]}, "other settings untouched")
         self.assertEqual(len(s["hooks"]["Stop"]), 2, "existing Stop hook kept"); self.assertEqual(len(s["hooks"]["Notification"]), 1)
@@ -162,6 +184,21 @@ class TestInstaller(unittest.TestCase):
         managed.write_text("{}")
         r = subprocess.run([sys.executable, str(ROOT / "agent" / "hooks" / "install_hooks.py")], capture_output=True, text=True, env=env, timeout=20)
         self.assertEqual(json.loads(r.stdout)["claude_code"], "already installed")
+
+    def test_copilot_hook_file_for_vscode_and_the_cli(self):
+        home = Path(tempfile.mkdtemp()); (home / ".vscode").mkdir()                 # VS Code present, no Copilot CLI, no Claude Code
+        out = self.run_installer(home)
+        self.assertEqual(out["copilot"], "installed"); self.assertTrue(out["claude_code"].startswith("skipped"))
+        f = home / ".copilot" / "hooks" / "pc-stats-panel.json"
+        data = json.loads(f.read_text())
+        self.assertEqual(data["version"], 1); self.assertEqual(data["hooks"]["Stop"][0]["type"], "command")
+        self.assertEqual(data["hooks"]["Stop"][0]["command"], str(home / "Library" / "Application Support" / "pc-stats-dock" / "hooks" / "claude_code_hook.py"))
+        self.assertEqual(self.run_installer(home)["copilot"], "already installed")
+        stale = json.loads(f.read_text()); stale["hooks"]["Stop"][0]["command"] = "/old/pc-stats-dock/app/agent/hooks/claude_code_hook.py"; f.write_text(json.dumps(stale))
+        self.assertEqual(self.run_installer(home, "--repair")["copilot"], "repaired")
+        self.assertEqual(self.run_installer(home, "--uninstall")["copilot"], "removed"); self.assertFalse(f.exists())
+        bare = Path(tempfile.mkdtemp())
+        self.assertTrue(self.run_installer(bare)["copilot"].startswith("skipped"))
 
     def test_missing_tools_are_skipped(self):
         home = Path(tempfile.mkdtemp())

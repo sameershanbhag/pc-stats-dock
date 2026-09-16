@@ -43,8 +43,8 @@ INFO='<?xml version="1.0" encoding="UTF-8"?>
   <key>CFBundleIdentifier</key><string>com.pcstatsdock.agent</string>
   <key>CFBundleExecutable</key><string>PCStatsPanel</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleVersion</key><string>2.11</string>
-  <key>CFBundleShortVersionString</key><string>2.11</string>
+  <key>CFBundleVersion</key><string>2.12</string>
+  <key>CFBundleShortVersionString</key><string>2.12</string>
   <key>LSUIElement</key><true/>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
 </dict></plist>'

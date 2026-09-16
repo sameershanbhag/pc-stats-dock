@@ -22,6 +22,9 @@ STABLE = HOME / "Library" / "Application Support" / "pc-stats-dock" / "hooks"
 CLAUDE = HOME / ".claude" / "settings.json"
 CODEX = HOME / ".codex" / "config.toml"
 CURSOR = HOME / ".cursor" / "hooks.json"
+COPILOT_DIR = HOME / ".copilot" / "hooks"
+COPILOT = COPILOT_DIR / "pc-stats-panel.json"
+VSCODE_MARKERS = (HOME / ".vscode",) + (() if os.environ.get("PCSTATS_HOME") else (Path("/Applications/Visual Studio Code.app"), Path("/Applications/Visual Studio Code - Insiders.app")))
 PY = sys.executable or "python3"
 MARK = "pc-stats-dock"      # every path of ours contains it: the old app folder, the app bundle, the stable folder
 MANAGED = Path(os.environ.get("PCSTATS_MANAGED") or "/Library/Application Support/ClaudeCode/managed-settings.json")
@@ -161,11 +164,46 @@ def cursor(mode):
     return "repaired" if mine else "installed"
 
 
+def copilot(mode):
+    """GitHub Copilot: VS Code's agent hooks and the Copilot CLI both read ~/.copilot/hooks/*.json (the same
+    Claude-Code-style Stop event), so one file there covers Copilot Chat in VS Code and the copilot command."""
+    hook = str(STABLE / "claude_code_hook.py")
+    present = (HOME / ".copilot").exists() or any(m.exists() for m in VSCODE_MARKERS)
+    if not present and mode != "uninstall":
+        return "skipped (neither VS Code nor the Copilot CLI found)"
+    try:
+        data = json.loads(COPILOT.read_text()) if COPILOT.exists() else {}
+    except json.JSONDecodeError:
+        return "left alone (pc-stats-panel.json is not valid JSON)"
+    hooks = data.setdefault("hooks", {})
+    entries = hooks.get("Stop") or []
+    mine = [e for e in entries if ours(e.get("command"), "claude_code_hook.py")]
+    others = [e for e in entries if e not in mine]
+    if mode == "uninstall":
+        if not COPILOT.exists() or not mine:
+            return "not present"
+        if others or any(k != "Stop" for k in hooks):
+            hooks["Stop"] = others
+            COPILOT.write_text(json.dumps(data, indent=2) + "\n")
+        else:
+            COPILOT.unlink()
+        return "removed"
+    if any(e.get("command") == hook for e in mine):
+        return "already installed"
+    if mode == "repair" and not mine:
+        return "not registered"
+    data.setdefault("version", 1)
+    hooks["Stop"] = others + [{"type": "command", "command": hook, "timeout": 10}]
+    COPILOT_DIR.mkdir(parents=True, exist_ok=True)
+    COPILOT.write_text(json.dumps(data, indent=2) + "\n")
+    return "repaired" if mine else "installed"
+
+
 def main():
     mode = "uninstall" if "--uninstall" in sys.argv else "repair" if "--repair" in sys.argv else "install"
     if mode != "uninstall":
         sync_stable()
-    out = {"claude_code": claude_code(mode), "codex": codex(mode), "cursor": cursor(mode),
+    out = {"claude_code": claude_code(mode), "copilot": copilot(mode), "codex": codex(mode), "cursor": cursor(mode),
            "generic": f"any script can call: {STABLE / 'notify.py'} --tool X --title Done"}
     print(json.dumps(out, indent=2))
 

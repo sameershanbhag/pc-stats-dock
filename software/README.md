@@ -61,6 +61,10 @@ app; tapping one jumps to that exact place:
 | iTerm2 | the session (found by its id) |
 | VS Code, Cursor, Windsurf | the window for that project folder |
 | Ghostty, Warp, kitty, others | the app, and the window whose title mentions the project if there is one |
+
+GitHub Copilot is covered too: VS Code's Copilot Chat reads Claude Code's hooks and `~/.copilot/hooks`, and
+the Copilot CLI reads the latter, so its finished turns appear labelled *Copilot* and jump to the VS Code window
+or the terminal.
 | inside tmux | the pane, then the terminal app |
 
 **Setup, once:** admin page → Right side → the AI chats feed → *Install hooks*. It adds a Stop
