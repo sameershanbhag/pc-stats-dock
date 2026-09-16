@@ -53,9 +53,10 @@ cask "pc-stats-panel" do
 
   # Registers (or re-registers, after an upgrade) the login item; no dialog. Homebrew runs steps in a sandbox
   # with a throwaway HOME and no access to launchd, so the app is opened through LaunchServices instead:
-  # that launch runs outside the sandbox with the real home, and "--setup" makes it silent.
+  # that launch runs outside the sandbox with the real home, "-n" starts a new instance even while the agent
+  # is already running (otherwise the argument would be dropped), and "--setup" makes it silent.
   postflight_steps do
-    run "/usr/bin/open", args: ["-a", "{{appdir}}/PC Stats Panel.app", "--args", "--setup"], must_succeed: false
+    run "/usr/bin/open", args: ["-n", "-a", "{{appdir}}/PC Stats Panel.app", "--args", "--setup"], must_succeed: false
   end
 
   # Stops the agent and removes the login item; the Accessibility grant and your buttons survive an upgrade.
