@@ -177,6 +177,15 @@ class TestDisplays(unittest.TestCase):
             self.assertEqual(p["id"], 9); self.assertEqual(cfg["panel_id"], "PPP"); save.assert_called_once()
             agent.locate_panel(cfg, state, ds); self.assertEqual(names.call_count, 1, "system_profiler asked once per set of displays")
 
+    def test_forced_dock_display_wins(self):
+        cfg = {"panel_resolution": [1540, 720], "panel_id": "PPP", "dock_display": "MMM", "panel_name": "T101F"}; state = agent.State()
+        screens = [{"persistent": "MMM", "contextual": 3, "res": (3840, 1080), "modes": [], "main": True, "type": "49 inch external screen"},
+                   {"persistent": "PPP", "contextual": 7, "res": (1540, 720), "modes": [(1540, 720)], "type": "10 inch external screen"}]
+        with mock.patch.object(agent, "DRY_RUN", False), mock.patch.object(agent.arrange, "current", return_value=(screens, "")):
+            self.assertEqual(agent.locate_panel(cfg, state, FAKE_DISPLAYS)["id"], 3, "the chosen display, not the panel")
+            cfg["dock_display"] = "ZZZ"; state.panel_screens = ([], None)
+            self.assertEqual(agent.locate_panel(cfg, state, FAKE_DISPLAYS)["id"], 7, "a chosen display that is not connected: back to automatic")
+
     def test_touch_mapper_follows_the_panel_size(self):
         import touch
         logs = []
@@ -763,6 +772,19 @@ class TestServer(unittest.TestCase):
         with mock.patch.dict(os.environ, {"PCSTATS_HOME": str(home)}):
             self.req("/api/admin/install-ai-hooks", "POST", {"uninstall": True})
         self.assertEqual(json.loads((home / ".claude" / "settings.json").read_text()), {})
+
+    def test_dock_display_endpoints(self):
+        screens = [{"persistent": "MMM", "contextual": 2, "res": (3840, 1080), "modes": [], "main": True, "type": "49 inch external screen"},
+                   {"persistent": "PPP", "contextual": 1, "res": (1540, 720), "modes": [(1540, 720)], "type": "10 inch external screen"}]
+        with mock.patch.object(agent.arrange, "current", return_value=(screens, "")), mock.patch.object(agent.arrange, "display_names", return_value={"T101F": [(1540, 720, False)], "DELL": [(3840, 1080, True)]}):
+            _, _, body = self.req("/api/admin/displays"); d = json.loads(body)
+            self.assertEqual([(x["id"], x["name"], x["main"]) for x in d["displays"]], [("MMM", "DELL", True), ("PPP", "T101F", False)])
+            code, _, body = self.req("/api/admin/dock-display", "POST", {"display": "MMM"})
+            self.assertEqual(code, 200); self.assertIn("DELL", json.loads(body)["message"])
+            self.assertEqual(json.loads((self.tmp / "config.json").read_text())["dock_display"], "MMM")
+            code, _, body = self.req("/api/admin/dock-display", "POST", {"display": "nope"}); self.assertEqual(code, 400)
+            code, _, body = self.req("/api/admin/dock-display", "POST", {"display": ""}); self.assertEqual(code, 200)
+            self.assertEqual(json.loads((self.tmp / "config.json").read_text())["dock_display"], "")
 
     def test_menu_bar_endpoint(self):
         code, _, body = self.req("/api/admin/menu", "POST", {"enabled": False})

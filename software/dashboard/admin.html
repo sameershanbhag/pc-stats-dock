@@ -109,6 +109,7 @@
           <select id="panelPos"><option value="above">above the main display</option><option value="below">below the main display</option><option value="left">left of the main display</option><option value="right">right of the main display</option></select></div>
         <div class="field"><label>&nbsp;</label><label class="mod" style="justify-content:flex-start"><input type="checkbox" id="keepPanel" checked> keep the panel for the dock only</label></div>
       </div>
+      <div class="row"><div class="field"><label for="dockDisplay">Dock opens on</label><select id="dockDisplay"><option value="">the panel (found automatically)</option></select></div><div class="field"><label>&nbsp;</label><span class="msg" id="dockDisplayMsg"></span></div></div>
       <div class="actions"><button class="btn" id="arrangeNow" type="button">Fix arrangement now</button><span class="msg" id="arrangeMsg"></span></div>
       <div class="row"><div class="field"><label class="mod" style="justify-content:flex-start"><input type="checkbox" id="menuBar" checked> gauge icon in the menu bar (admin page, face preview, restart)</label></div><div class="field"><span class="msg" id="menuMsg"></span></div></div>
       <p class="hint" id="touchState">Touch: checking…</p>
@@ -355,6 +356,23 @@
     catch (e) { out.textContent = 'agent not reachable'; out.className = 'msg err'; }
   }
   $('arrangeNow').addEventListener('click', arrangeNow);
+  async function loadDisplays() {
+    const sel = $('dockDisplay'); if (standalone) return;
+    try {
+      const j = await (await fetch('/api/admin/displays', { cache: 'no-store' })).json();
+      const cur = j.dock_display || '';
+      sel.innerHTML = '<option value="">the panel (found automatically)</option>' + (j.displays || []).map(d => `<option value="${att(d.id)}">${att(d.name)} · ${att(d.resolution)}${d.main ? ' · main display' : ''}</option>`).join('');
+      if (cur && !(j.displays || []).some(d => d.id === cur)) sel.insertAdjacentHTML('beforeend', `<option value="${att(cur)}">chosen display (not connected now)</option>`);
+      sel.value = cur;
+    } catch (e) { /* keep the automatic option */ }
+  }
+  $('dockDisplay').addEventListener('change', async () => {
+    const out = $('dockDisplayMsg'); if (standalone) { say('Preview only.'); return; }
+    out.textContent = 'saving…'; out.className = 'msg';
+    try { const j = await api('/api/admin/dock-display', { display: $('dockDisplay').value }); out.textContent = j.message || (j.ok ? 'saved' : 'not saved'); out.className = 'msg ' + (j.ok ? 'ok' : 'err'); }
+    catch (e) { out.textContent = 'agent not reachable'; out.className = 'msg err'; }
+  });
+  loadDisplays(); setInterval(loadDisplays, 15000);
   async function touchState() {
     const el = $('touchState');
     try {

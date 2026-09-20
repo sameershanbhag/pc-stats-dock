@@ -86,8 +86,8 @@ Any other tool or script can report too:
 ```
 or `POST http://127.0.0.1:4400/api/events` with `{"tool","title","text","state","cwd"}`.
 
-Entries: green edge = finished, amber = needs you (a permission prompt or a question), dim =
-already seen. Tapping marks it seen. One entry per chat session, so a busy session does not
+Entries are newest first: green edge = finished, amber = needs you (a permission prompt or a question), dim =
+already seen. Tapping marks it seen; *clear* in the feed's header empties the list. One entry per chat session, so a busy session does not
 flood the list.
 
 ## Right side: message feeds
@@ -115,6 +115,9 @@ it. The agent handles both, automatically, every time the panel is connected:
 - **The big monitor stays main.** The panel is parked above it (change to below/left/right in the
   admin page's *Display* card) using `displayplacer`, and windows that landed on the panel are moved
   back to the main display. Only the dashboard lives on the panel.
+- **Choose the screen yourself.** *Display* card › *Dock opens on*: leave it on automatic (the panel is found by its
+  size, identity or name) or pick any connected display; the dashboard closes and reopens there at once and the
+  arrangement follows that choice. If the chosen display is unplugged, the automatic rule takes over again.
 - **Touch is mapped onto the panel.** The launcher's `--touch-map` mode watches for the panel's
   touchscreen (HID usage "touch screen") and, through an event tap, relocates its taps from the main
   display onto the panel. It uses the same Accessibility permission as the key buttons; the admin

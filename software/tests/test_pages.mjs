@@ -123,17 +123,18 @@ async function testDashboardCaps() {
 
 async function testDashboardAi() {
   console.log('dashboard · AI chats feed');
-  const now = Date.now() / 1000; const focused = [];
+  const now = Date.now() / 1000; const focused = []; const cleared = [];
   let feedsResp = { right_side: 'feeds3', feeds: [
     { id: 'feed-1', title: 'AI chats', source: 'ai', status: 'ok', updated: now, items: [
-      { id: 'abcdef0123', who: 'Claude Code', where: 'proj · Terminal', text: 'Finished — tests pass', ts: now - 30, link: 'focus:abcdef0123', state: 'done', seen: false },
-      { id: 'abcdef0124', who: 'Codex', where: 'billing · VS Code', text: 'Needs your attention', ts: now - 300, link: 'focus:abcdef0124', state: 'needs_input', seen: true } ] },
+      { id: 'abcdef0124', who: 'Codex', where: 'billing · VS Code', text: 'Needs your attention', ts: now - 300, link: 'focus:abcdef0124', state: 'needs_input', seen: true },
+      { id: 'abcdef0123', who: 'Claude Code', where: 'proj · Terminal', text: 'Finished — tests pass', ts: now - 30, link: 'focus:abcdef0123', state: 'done', seen: false } ] },
     { id: 'feed-2', title: 'Slack', source: 'slack', status: 'needs_setup', items: [] },
     { id: 'feed-3', title: 'Teams', source: 'notifications', status: 'needs_fda', items: [] } ] };
   const fetchImpl = (url, opts = {}) => {
     if (url.startsWith('/api/config')) return json({ ...CONFIG, right_side: 'feeds3', feeds: [{ id: 'feed-1', title: 'AI chats', source: 'ai' }, { id: 'feed-2', title: 'Slack', source: 'slack' }, { id: 'feed-3', title: 'Teams', source: 'notifications' }] });
     if (url.startsWith('/api/stats')) return json(STATS);
     if (/^\/api\/events\/[0-9a-f]{10}\/focus$/.test(url)) { focused.push(url); feedsResp.feeds[0].items[0].seen = true; return json({ ok: true, message: 'jumped to Terminal' }); }
+    if (url === '/api/events/clear') { cleared.push(1); feedsResp.feeds[0].items = []; return json({ ok: true }); }
     if (url.startsWith('/api/feeds')) return json(feedsResp);
     return json({}, false, 404);
   };
@@ -143,6 +144,7 @@ async function testDashboardAi() {
   const ai = d.querySelector('.feed[data-id="feed-1"]');
   check(ai.querySelector('.st').textContent === '1 new' && ai.querySelector('.st').classList.contains('new'), 'header counts unseen');
   const items = ai.querySelectorAll('.msg.ai');
+  check(items[0].querySelector('.who').textContent === 'Claude Code', 'newest entry first even when the agent sent it second');
   check(items.length === 2 && items[0].classList.contains('unseen') && !items[1].classList.contains('unseen'), 'unseen styling');
   check(items[1].classList.contains('needs') && items[1].querySelector('.state').textContent.includes('needs you'), 'needs-input styling and label');
   items[0].dispatchEvent(new dom.window.Event('pointerdown', { bubbles: true })); await sleep(60);
@@ -150,6 +152,9 @@ async function testDashboardAi() {
   check(d.getElementById('toast').textContent === 'jumped to Terminal', 'toast shows the jump result');
   await sleep(60);
   check(ai.querySelector('.st').textContent === 'all seen', 'list refreshed after the jump');
+  check(ai.querySelector('.clear').classList.contains('show'), 'clear button shown while there are entries');
+  ai.querySelector('.clear').dispatchEvent(new dom.window.Event('pointerdown', { bubbles: true })); await sleep(80);
+  check(cleared.length === 1 && ai.querySelectorAll('.msg.ai').length === 0 && !ai.querySelector('.clear').classList.contains('show'), 'clear empties the list and hides the button');
   dom.window.close();
 }
 
@@ -227,6 +232,8 @@ async function testAdmin() {
     if (url === '/api/admin/face') { const b = JSON.parse(opts.body); saves.push({ face: b }); return json({ ok: true, message: 'saved', face: b }); }
     if (url === '/api/admin/face/preview') { saves.push({ preview: true }); return json({ ok: true, message: 'the face is on the panel for 20 seconds' }); }
     if (url === '/api/admin/menu') { const b = JSON.parse(opts.body); saves.push({ menu: b }); return json({ ok: true, message: 'menu bar icon off', menu_bar: b.enabled }); }
+    if (url.startsWith('/api/admin/displays')) return json({ ok: true, dock_display: '', displays: [{ id: 'AAA', name: 'DELL P3425WE', resolution: '3440×1440', main: true }, { id: 'BBB', name: 'T101F', resolution: '1540×720', main: false }] });
+    if (url === '/api/admin/dock-display') { const b = JSON.parse(opts.body); saves.push({ dock: b }); return json({ ok: true, message: 'dock opens on T101F (1540×720)', dock_display: b.display }); }
     return json({}, false, 404);
   };
   const dom = boot(admin, { fetchImpl }); const w = dom.window, d = w.document;
@@ -236,6 +243,10 @@ async function testAdmin() {
   d.getElementById('faceOn').checked = false; d.getElementById('faceOn').dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(30);
   const fs = saves.find(x => x.face);
   check(fs && fs.face.enabled === false && fs.face.idle_min === 5 && fs.face.color === '#e08c4c' && fs.face.on_video === true && fs.face.video_min === 1 && fs.face.style === 'glass', `face settings saved (${JSON.stringify(fs)})`);
+  await sleep(60);
+  check(d.getElementById('dockDisplay').options.length === 3 && d.getElementById('dockDisplay').options[2].textContent.includes('T101F'), 'display picker lists the connected displays');
+  d.getElementById('dockDisplay').value = 'BBB'; d.getElementById('dockDisplay').dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(30);
+  check(saves.some(x => x.dock && x.dock.display === 'BBB') && d.getElementById('dockDisplayMsg').textContent.includes('T101F'), 'choosing a display is saved');
   d.getElementById('menuBar').checked = false; d.getElementById('menuBar').dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(30);
   check(saves.some(x => x.menu && x.menu.enabled === false) && d.getElementById('menuMsg').textContent.includes('off'), 'menu bar switch saved');
   d.getElementById('facePreview').click(); await sleep(30);

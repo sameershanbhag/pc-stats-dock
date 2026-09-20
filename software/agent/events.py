@@ -202,7 +202,8 @@ class EventStore:
 
     def list(self, limit=20):
         with self.lock:
-            return [dict(e) for e in self.events[:limit]]
+            ordered = sorted(self.events, key=lambda e: e.get("ts", 0), reverse=True)   # newest first, whatever the file held
+            return [dict(e) for e in ordered[:limit]]
 
     def get(self, eid):
         with self.lock:

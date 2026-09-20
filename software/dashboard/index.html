@@ -104,6 +104,9 @@
   .feed .fh .t { font-family: var(--display); font-weight: 600; font-size: 16px; letter-spacing: .03em; }
   .feed .fh .st { font-size: 11px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
   .feed .fh .st.warn { color: var(--warn); }
+  .feed .fh .clear { margin-left: auto; margin-right: 10px; background: transparent; border: 1px solid var(--line); color: var(--muted); font: inherit; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; padding: 2px 8px; cursor: pointer; display: none; }
+  .feed .fh .clear.show { display: inline-block; }
+  .feed .fh .clear:active { color: var(--accent); border-color: var(--accent); }
   .feed .list { overflow: hidden; padding: 8px 10px; display: grid; gap: 6px; align-content: start; }
   .msg { display: grid; grid-template-columns: 1fr auto; gap: 1px 10px; padding: 6px 9px; background: var(--panel-2); border-left: 2px solid var(--teal); cursor: pointer; }
   .msg.teams { border-left-color: var(--accent); }
@@ -338,7 +341,14 @@
   const MAX_FEEDS = { three: 3, 'three-feeds': 3, feeds: 2, feeds3: 3, mixed: 1, buttons: 0 };
   function feedPanel(f) {
     const el = document.createElement('section'); el.className = 'feed'; el.dataset.id = f.id;
-    el.innerHTML = `<div class="fh"><span class="t">${esc(f.title || f.source)}</span><span class="st">connecting</span></div><div class="list"><div class="empty">Waiting for the first update…</div></div>`;
+    el.innerHTML = `<div class="fh"><span class="t">${esc(f.title || f.source)}</span><button class="clear" type="button" aria-label="Clear the list">clear</button><span class="st">connecting</span></div><div class="list"><div class="empty">Waiting for the first update…</div></div>`;
+    el.querySelector('.clear').addEventListener('pointerdown', async (ev) => {
+      ev.stopPropagation();
+      if (window.__standalone) { say('demo: would clear the list'); return; }
+      try { await fetch('/api/events/clear', { method: 'POST' }); } catch (e) { say('agent not reachable', true); return; }
+      el.querySelector('.list').innerHTML = '<div class="empty">Cleared.</div>'; el.querySelector('.st').textContent = ''; el.querySelector('.clear').classList.remove('show');
+      tickFeeds();
+    });
     feedBoxes[f.id] = el; return el;
   }
   function stack(col, panels) { col.innerHTML = ''; col.style.gridTemplateRows = `repeat(${Math.max(panels.length, 1)}, 1fr)`; panels.forEach(p => col.appendChild(p)); }
@@ -380,6 +390,8 @@
     st.textContent = f.status === 'ok' ? (f.updated ? 'updated ' + ago(f.updated) : '') : STATUS_TEXT[f.status] || f.status; st.classList.toggle('warn', warn);
     if (f.status !== 'ok') { list.innerHTML = `<div class="empty">${STATUS_HELP[f.status] || ''}${f.error ? '<br>' + esc(f.error) : ''}</div>`; return; }
     if (f.source === 'ai') {
+      f.items = f.items.slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));                 // newest first, always
+      el.querySelector('.clear').classList.toggle('show', f.items.length > 0);
       const unseen = f.items.filter(i => !i.seen).length;
       st.textContent = unseen ? unseen + ' new' : (f.items.length ? 'all seen' : ''); st.classList.toggle('new', unseen > 0);
       if (!f.items.length) { list.innerHTML = '<div class="empty">Nothing yet. When Claude Code, Copilot, Codex or Cursor finish a turn, it shows up here. Tap an entry to jump to that window.</div>'; return; }

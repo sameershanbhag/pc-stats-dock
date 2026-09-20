@@ -121,6 +121,16 @@ class TestToolOfHook(unittest.TestCase):
         ev = events.from_claude_code({"payload": stop, "env": {"TERM_PROGRAM": "ghostty"}, "ancestors": ["zsh", "ghostty"]})
         self.assertEqual(ev["tool"], "Claude Code", "nothing says Copilot: Claude Code")
 
+    def test_store_lists_newest_first_and_clears(self):
+        path = Path(tempfile.mkdtemp()) / "e.json"
+        path.write_text(json.dumps([{"id": "a", "tool": "X", "ts": 10, "session": "1"}, {"id": "b", "tool": "X", "ts": 30, "session": "2"}, {"id": "c", "tool": "X", "ts": 20, "session": "3"}]))
+        store = events.EventStore(path)
+        self.assertEqual([e["id"] for e in store.list()], ["b", "c", "a"], "sorted by time even when the file was not")
+        store.add({"tool": "X", "session": "4", "title": "new"})
+        self.assertEqual(store.list()[0]["title"], "new")
+        store.clear()
+        self.assertEqual(store.list(), []); self.assertEqual(json.loads(path.read_text()), [])
+
     def test_store_keeps_one_entry_per_session_and_tool(self):
         store = events.EventStore(Path(tempfile.mkdtemp()) / "e.json")
         store.add({"tool": "Copilot", "session": "s1", "title": "Finished", "state": "done"})

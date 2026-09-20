@@ -137,6 +137,7 @@ def load_config():
     cfg.setdefault("keep_panel_for_dock", True)     # never let the panel become the main display
     cfg.setdefault("menu_bar", True)                # the gauge icon in the menu bar (admin page, face preview, restart)
     cfg.setdefault("panel_id", "")                  # the panel's display identity, learned on first sight (survives wrong resolutions)
+    cfg.setdefault("dock_display", "")              # "" = find the panel automatically; else the persistent id of the display the dock must use
     cfg.setdefault("panel_name", "T101F")           # what macOS calls the panel (its EDID name); the Magedok T101F by default
     face = cfg.setdefault("face", {})               # the idle face: eyes on the panel when the Mac is left alone
     for k, v in FACE_DEFAULTS.items():
@@ -567,6 +568,8 @@ def make_handler(state, cfg, feeds_mgr=None, events=None):
                                         "panel": {"connected": bool(panel), "main": bool(panel and panel["main"]), "position": cfg.get("panel_position", "above"), "keep": cfg.get("keep_panel_for_dock", True),
                                                   "resolution": [panel["w"], panel["h"]] if panel else None, "native": [pw, ph], "remembered": bool(cfg.get("panel_id")),
                                                   "unassigned": bool(state.unassigned) and not panel}})
+            if path == "/api/admin/displays":
+                return self._json(200, {"ok": True, "displays": display_choices(state), "dock_display": cfg.get("dock_display") or ""})
             if path == "/api/config":
                 return self._json(200, {"pc_name": cfg["_pc_name"], "buttons": cfg["buttons"], "cfg_version": state.cfg_version, "platform": "mac",
                                         "right_side": cfg.get("right_side", "feeds"), "feeds": public_feeds(cfg), "app_presets": list(APP_PRESETS),
@@ -677,6 +680,22 @@ def make_handler(state, cfg, feeds_mgr=None, events=None):
                     return self._json(500, {"ok": False, "message": f"could not save: {exc}"})
                 state.cfg_version += 1
                 return self._json(200, {"ok": True, "message": "saved", "face": cfg["face"]})
+            if path == "/api/admin/dock-display":
+                body = self._body() or {}
+                want = str(body.get("display") or "")
+                if want and want not in {sc.get("persistent") for sc in (arrange.current()[0] or [])}:
+                    return self._json(400, {"ok": False, "message": "that display is not connected"})
+                cfg["dock_display"] = want
+                try:
+                    save_config(cfg)
+                except OSError as exc:
+                    return self._json(500, {"ok": False, "message": f"could not save: {exc}"})
+                state.cfg_version += 1
+                state.arranged_for = None                        # re-run the arrangement for the new choice
+                state.panel_screens = ([], None)
+                if state.kiosk and not DRY_RUN:
+                    state.kiosk.close()                           # the dashboard window reopens on the chosen display
+                return self._json(200, {"ok": True, "message": "dock opens on " + (dock_display_name(want, state) if want else "the panel (automatic)"), "dock_display": want})
             if path == "/api/admin/menu":
                 body = self._body() or {}
                 cfg["menu_bar"] = bool(body.get("enabled", True))
@@ -853,11 +872,55 @@ def check_unassigned(cfg, state, ds):
                                                     " (a MacBook with a base M-series chip drives only one external display with the lid open)"))
 
 
+def display_choices(state):
+    """Connected displays for the admin page: [{id, name, resolution, main, is_panel}] (id = displayplacer's persistent id)."""
+    screens, _ = arrange.current()
+    names = arrange.display_names()
+    used = set()
+    out = []
+    for sc in screens or []:
+        name = ""
+        for n, entries in names.items():
+            if n in used:
+                continue
+            if any((pw, ph) == tuple(sc["res"]) or (ph, pw) == tuple(sc["res"]) for pw, ph, _ in entries):
+                name = n
+                used.add(n)
+                break
+        label = name or sc.get("type") or "display"
+        out.append({"id": sc["persistent"], "name": label, "resolution": f"{sc['res'][0]}×{sc['res'][1]}", "main": bool(sc.get("main")),
+                    "inches": arrange.inches_of(sc)})
+    return out
+
+
+def dock_display_name(persistent, state):
+    for d in display_choices(state):
+        if d["id"] == persistent:
+            return f"{d['name']} ({d['resolution']})"
+    return "the chosen display"
+
+
+def forced_display(cfg, state, ds):
+    """The display the user chose for the dock (admin page), or None when the choice is 'automatic' or that
+    display is not connected. A forced choice wins over every automatic rule."""
+    want = cfg.get("dock_display") or ""
+    if not want:
+        return None
+    ids = tuple(sorted(d["id"] for d in ds))
+    sc = next((x for x in panel_screens(state, ids) if x.get("persistent") == want), None)
+    if not sc or not sc.get("contextual"):
+        return None
+    return next((d for d in ds if d["id"] == sc["contextual"]), None)
+
+
 def locate_panel(cfg, state, ds=None):
-    """The panel among the displays: by its size, or by its identity when macOS gave it another resolution.
-    Learns the identity (displayplacer's persistent id) the first time the panel is seen by size."""
+    """The panel among the displays: the one the user forced; else by its size, or by its identity when macOS
+    gave it another resolution. Learns the identity (displayplacer's persistent id) the first time the panel is seen."""
     w, h = cfg["panel_resolution"]
     ds = list_displays() if ds is None else ds
+    forced = forced_display(cfg, state, ds)
+    if forced:
+        return forced
     panel = displays_find_panel(w, h, displays=ds)
     ids = tuple(sorted(d["id"] for d in ds))
     if panel or len(ds) < 2 or DRY_RUN:
@@ -922,7 +985,7 @@ def keep_panel_for_dock(cfg, state, force=False):
         return False, "panel not connected" if not panel else "only one display"
     if not force and not panel["main"] and state.arranged_for == panel["id"]:
         return False, "already arranged"
-    changed, msg = arrange.arrange((w, h), cfg.get("panel_position", "above"), DRY_RUN, cfg.get("panel_id", ""))
+    changed, msg = arrange.arrange((w, h), cfg.get("panel_position", "above"), DRY_RUN, cfg.get("dock_display") or cfg.get("panel_id", ""))
     if changed:
         state.panel_screens = ([], None)                  # the mode may have changed: re-read next time
     notes = [msg]
